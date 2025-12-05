@@ -62,9 +62,9 @@ with tab1:
                 st.error("請先在左側輸入 Google API Key 才能出題喔！")
             else:
                 try:
-                    # 設定 Gemini (使用 gemini-pro)
+                    # 設定 Gemini (使用最新 gemini-1.5-flash)
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-pro')
+                    model = genai.GenerativeModel('gemini-1.5-flash')
                     
                     prompt_gen = """
                     你現在是台灣高中英文學測的出題老師。請從「食、衣、住、行、育、樂」中隨機選一個主題，
@@ -101,9 +101,9 @@ with tab2:
             st.warning("請輸入作文內容！")
         else:
             try:
-                # 設定 Gemini (使用 gemini-pro)
+                # 設定 Gemini (使用最新 gemini-1.5-flash)
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-pro')
+                model = genai.GenerativeModel('gemini-1.5-flash')
                 
                 # 核心 System Prompt
                 system_prompt = f"""
