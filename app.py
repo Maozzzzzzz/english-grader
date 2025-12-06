@@ -5,6 +5,7 @@ import re # 用於計算字數
 
 # ==========================================
 # 👇👇👇 專題設定區 (已填入你的 API Key) 👇👇👇
+# 這裡有填字，網頁就會自動登入，輸入框會消失
 PROJECT_API_KEY = "AIzaSyB__HHKjyIX0gB3avw5j_acBDy3fh_wblQ"
 # ==========================================
 
@@ -89,7 +90,7 @@ with st.sidebar:
         """)
 
 st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
-st.caption("專為台灣高中生打造，依大考中心標準提供深度批改，不須補習也能練習英文作文!!")
+st.caption("專為台灣高中生打造，依照大考中心標準提供三階段深度批改。")
 
 # 初始化 Session State
 if 'generated_topic' not in st.session_state:
@@ -127,7 +128,7 @@ with tab1:
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        topic_source = st.radio("題目來源：", ["AI 自動出題", "自行輸入"])
+        topic_source = st.radio("題目來源：", ["AI 自動出題 (食衣住行育樂)", "自行輸入"])
     
     current_topic = ""
     
@@ -137,7 +138,7 @@ with tab1:
                 st.error("❌ 請先設定 API Key")
             else:
                 with st.spinner("AI 正在出題中..."):
-                    prompt_gen = "你現在是台灣高中英文學測的出題老師。請從貼近學生生活的「食、衣、住、行、育、樂」中隨機選一個主題，設計一個符合學測格式的英文作文題目。..."
+                    prompt_gen = "你現在是台灣高中英文學測的出題老師。請從「食、衣、住、行、育、樂」中隨機選一個主題，設計一個符合學測格式的英文作文題目。..."
                     result = call_gemini_api(prompt_gen, api_key, model_option)
                     st.session_state.generated_topic = result
         
