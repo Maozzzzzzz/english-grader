@@ -12,9 +12,24 @@ st.set_page_config(
 # --- 側邊欄設計 ---
 with st.sidebar:
     st.title("⚙️ 設定")
-    # 加入 .strip() 自動去除前後空白，防止複製錯誤
+    # API Key 輸入
     api_key_input = st.text_input("請輸入 Google API Key", type="password", help="請前往 Google AI Studio 免費申請")
     api_key = api_key_input.strip() if api_key_input else ""
+    
+    st.markdown("---")
+    
+    # 🔥🔥🔥 這裡就是解決問題的關鍵！讓使用者可以自己切換模型 🔥🔥🔥
+    st.subheader("🤖 AI 模型選擇 (如果失敗請換一個)")
+    model_option = st.selectbox(
+        "請選擇模型：",
+        [
+            "gemini-1.5-flash",       # 最新最快 (預設)
+            "gemini-1.5-flash-001",   # 穩定版 Flash
+            "gemini-1.5-pro",         # 更聰明但慢一點
+            "gemini-pro"              # 舊版但最穩定
+        ],
+        help="如果出現 404 錯誤，請嘗試切換到其他模型"
+    )
     
     st.markdown("---")
     st.subheader("📚 大考中心評分機制")
@@ -37,11 +52,10 @@ st.markdown("由 AI 名師提供「手術式」精準批改，直擊你的寫作
 if 'generated_topic' not in st.session_state:
     st.session_state.generated_topic = ""
 
-# --- 核心功能：直接使用 HTTP 請求呼叫 Google Gemini API ---
-# 這種寫法不需要依賴 google-generativeai 套件的版本，相容性最強
-def call_gemini_api(prompt, key):
-    # 使用最新的 gemini-1.5-flash 模型
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={key}"
+# --- 核心功能：萬能連線函數 (支援切換模型) ---
+def call_gemini_api(prompt, key, model_name):
+    # 使用使用者選擇的模型名稱
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
     
     headers = {'Content-Type': 'application/json'}
     data = {
@@ -56,15 +70,13 @@ def call_gemini_api(prompt, key):
         # 檢查是否成功
         if response.status_code == 200:
             result = response.json()
-            # 解析回傳的文字
             try:
                 return result['candidates'][0]['content']['parts'][0]['text']
             except (KeyError, IndexError):
-                return "⚠️ 發生錯誤：AI 回傳了無法解析的格式，請再試一次。"
+                return "⚠️ 發生錯誤：AI 回傳了怪怪的格式，請再試一次。"
         else:
-            # 如果失敗，回傳錯誤代碼
-            error_msg = response.text
-            return f"⚠️ 連線錯誤 (Status {response.status_code}): {error_msg}"
+            # 回傳錯誤訊息，讓使用者知道發生什麼事
+            return f"⚠️ 連線錯誤 (Status {response.status_code}): {response.text}"
             
     except Exception as e:
         return f"⚠️ 系統錯誤：{str(e)}"
@@ -84,7 +96,7 @@ with tab1:
             if not api_key:
                 st.error("❌ 請先在左側輸入 Google API Key！")
             else:
-                with st.spinner("正在絞盡腦汁出題中..."):
+                with st.spinner(f"正在使用 {model_option} 模型出題中..."):
                     prompt_gen = """
                     你現在是台灣高中英文學測的出題老師。請從「食、衣、住、行、育、樂」中隨機選一個主題，
                     設計一個符合學測格式的英文作文題目。
@@ -93,11 +105,12 @@ with tab1:
                     2. 清楚列出「第一段」與「第二段」必須涵蓋的內容。
                     請直接輸出題目內容即可，不要有多餘的開場白。
                     """
-                    # 呼叫我們的萬能函數
-                    result = call_gemini_api(prompt_gen, api_key)
+                    # 呼叫 API，傳入使用者選擇的模型
+                    result = call_gemini_api(prompt_gen, api_key, model_option)
                     
                     if "⚠️" in result:
                         st.error(result)
+                        st.warning("👉 請嘗試在左側選單切換其他模型 (例如 gemini-pro)")
                     else:
                         st.session_state.generated_topic = result
         
@@ -164,12 +177,12 @@ with tab2:
             ## 🚀 下一步練習建議
             """
 
-            with st.spinner("AI 名師正在嘗試連接大腦並批改中..."):
-                # 呼叫我們的萬能函數
-                result = call_gemini_api(system_prompt, api_key)
+            with st.spinner(f"AI 名師 ({model_option}) 正在批改中..."):
+                # 呼叫 API，傳入使用者選擇的模型
+                result = call_gemini_api(system_prompt, api_key, model_option)
                 
                 if "⚠️" in result:
                     st.error(result)
-                    st.info("如果是連線錯誤，請檢查 API Key 是否正確。")
+                    st.warning("👉 請嘗試在左側選單切換其他模型 (例如 gemini-pro)")
                 else:
                     st.markdown(result)
