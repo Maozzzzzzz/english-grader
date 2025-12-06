@@ -31,6 +31,19 @@ st.markdown("""
         text-align: center;
         box-shadow: 2px 2px 5px rgba(0,0,0,0.1);
     }
+    /* 作者署名樣式 */
+    .footer {
+        position: fixed;
+        left: 0;
+        bottom: 0;
+        width: 100%;
+        text-align: center;
+        color: #888;
+        font-size: 12px;
+        padding: 10px;
+        background-color: transparent;
+        pointer-events: none; /* 讓點擊穿透 */
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,21 +89,26 @@ with st.sidebar:
     # 將評分標準放入側邊欄，隨時可參考
     with st.expander("📚 大考中心評分標準 (點擊展開)"):
         st.markdown("""
-        **1. 內容 (Content)**
-        - 切題度、細節支持。
+        **依據 113 年學測統計數據校正：**
         
-        **2. 組織 (Organization)**
-        - 結構完整、轉折語使用。
+        **🏆 頂標 (15-20分)**
+        - 僅前 **7.8%** 考生。
+        - 內容深刻、文法零失誤、修辭優美。
         
-        **3. 文法句構 (Grammar)**
-        - 正確性、句型變化。
+        **👍 前標 (12-14分)**
+        - 約前 **20%** 考生。
+        - 結構完整、錯誤極少。
         
-        **4. 字彙拼字 (Vocabulary)**
-        - 用字精準、搭配詞。
+        **😐 均標 (9-11分)**
+        - 約 **50%** 考生落點。
+        - 溝通清楚，但有明顯文法錯誤或用字單調。
+        
+        **📉 後標 (0-8分)**
+        - 內容貧乏或嚴重離題。
         """)
 
 st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
-st.caption("專為台灣高中生打造，依照大考中心標準提供三階段深度批改。")
+st.caption("專為台灣高中生打造，依照大考中心數據嚴格校正的模擬閱卷系統。")
 
 # 初始化 Session State
 if 'generated_topic' not in st.session_state:
@@ -128,22 +146,40 @@ with tab1:
     col1, col2 = st.columns([1, 2])
     
     with col1:
-        topic_source = st.radio("題目來源：", ["AI 自動出題 (食衣住行育樂)", "自行輸入"])
+        topic_source = st.radio("題目來源：", ["AI 自動出題", "自行輸入"])
     
     current_topic = ""
     
-    if topic_source == "AI 自動出題 (食衣住行育樂)":
+    if topic_source == "AI 自動出題":
         if st.button("✨ 生成模擬試題", type="primary"):
             if not api_key:
                 st.error("❌ 請先設定 API Key")
             else:
-                with st.spinner("AI 正在出題中..."):
-                    prompt_gen = "你現在是台灣高中英文學測的出題老師。請從「食、衣、住、行、育、樂」中隨機選一個主題，設計一個符合學測格式的英文作文題目。..."
+                with st.spinner("AI 正在設計貼近高中生活的題目..."):
+                    # 🔥 出題 Prompt 🔥
+                    prompt_gen = """
+                    角色：你是一位資深的高中英文學測出題老師。
+                    任務：請從以下領域中選一個貼近台灣高中生生活的主題：
+                    「食衣住行育樂、人際關係、校園生活、親情、友情、自我成長、科技與生活」。
+                    
+                    輸出要求：
+                    1. **絕對不要**提到「隨機選出」或「主題是...」這類字眼。直接給題目。
+                    2. **全中文**描述，模擬學測考卷的題目呈現方式。
+                    3. 格式必須包含：
+                       - 題目引文 (約 50 字，設定情境)
+                       - 第一段引導 (說明應包含的內容)
+                       - 第二段引導 (說明應包含的內容)
+                    
+                    範例格式：
+                    提示：在成長過程中，我們常面臨...
+                    第一段：請描述...
+                    第二段：請說明...
+                    """
                     result = call_gemini_api(prompt_gen, api_key, model_option)
                     st.session_state.generated_topic = result
         
         if st.session_state.generated_topic:
-            st.info("👇 這是你的題目：")
+            st.info("👇 模擬試題：")
             st.markdown(st.session_state.generated_topic)
             current_topic = st.session_state.generated_topic
     else:
@@ -153,14 +189,13 @@ with tab1:
 with tab2:
     st.subheader("📍 寫作與批改")
     
-    # 📌 功能改進：在寫作區顯示題目，避免切換
     if current_topic:
         with st.expander("📄 點擊查看當前題目", expanded=False):
             st.markdown(current_topic)
     else:
         st.warning("⚠️ 尚未設定題目，建議先到「題目設定」頁面生成或輸入題目。")
 
-    # 📌 功能改進：一鍵載入範文 (Demo 用)
+    # Demo 按鈕
     col_demo, col_empty = st.columns([1, 4])
     with col_demo:
         if st.button("📝 載入示範作文 (Demo)"):
@@ -168,7 +203,6 @@ with tab2:
 
 However, despite the convenience robots may bring, I am worried that they might make us lazy. If we rely on them too much, we might lose the ability to take care of ourselves. Therefore, while enjoying the benefits of technology, we should also remind ourselves not to be overly dependent on it."""
 
-    # 寫作區
     user_essay = st.text_area(
         "請在此輸入英文作文：", 
         value=st.session_state.essay_content,
@@ -176,7 +210,7 @@ However, despite the convenience robots may bring, I am worried that they might 
         key="essay_input"
     )
     
-    # 📌 功能改進：即時字數統計
+    # 字數統計
     word_count = len(re.findall(r'\w+', user_essay))
     if word_count > 0:
         if word_count < 120:
@@ -190,36 +224,53 @@ However, despite the convenience robots may bring, I am worried that they might 
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # System Prompt (保持原本的三階段邏輯)
+            # 🔥 全新升級：基於真實統計數據的嚴格評分 Prompt 🔥
             system_prompt = f"""
-            # Role: 台灣學測英文作文批改助手
-            # Task: 執行「三階段回饋」流程
+            # Role: 台灣學測英文作文「嚴格」閱卷委員
+            # Objective: 根據 113 年學測得分統計數據進行「客觀且嚴格」的評分。
             
+            # 📊 評分校正數據 (Statistical Calibration):
+            你必須嚴格遵守此常態分佈，不要給分過於甜美：
+            - **15~20分 (頂標)**：僅前 **7.8%** 的考生。文章必須近乎完美，有深度思想、精準的 6000 單字彙運用、複雜句構且零重大錯誤。
+            - **12~14分 (前標)**：約前 **20%** 的考生。結構完整，論點清楚，錯誤極少。
+            - **9~11分 (均標/中位數)**：約 **50%** 的考生落在此區間。內容基本切題，但文法有明顯錯誤，用字較為基礎(國中程度)。
+            - **0~8分 (後標)**：內容貧乏、字數不足、離題或嚴重文法錯誤導致無法理解。
+
             # Context
             【題目】{current_topic}
             【學生作文】{user_essay}
             
-            # 要求
-            1. **第一階段**：依照學測 20 分制評分 (內容/組織/文法/字彙)。
-               - 格式要求：請明確列出四個分數，例如：「內容: 4/5」、「組織: 3/5」。
-            2. **第二階段**：詳細訂正，用 [粗體方框] 標示修改。
-            3. **第三階段**：提供詞組、句型、練習題。
+            # Task: 執行「三階段回饋」
             
+            ## 第一階段：嚴格評分 (各項 0-5 分)
+            請基於上述統計數據給分。如果這篇文章只是普通好，請不要給超過 3 分(單項)。
+            1. **內容 (Content)**: 切題度、細節支持。
+            2. **組織 (Organization)**: 結構完整、轉承詞使用。
+            3. **文法句構 (Grammar)**: 錯誤是否影響理解、句型多樣。
+            4. **字彙拼字 (Vocabulary)**: 用字精準、拼字正確。
+            *總分滿分 20 分。請給予一段「閱卷官風格」的簡評，直接指出為什麼他拿不到 15 分的原因。*
+
+            ## 第二階段：文章訂正 (詳細批改)
+            - 列出原句
+            - 提供訂正 (用 **[粗體方框]** 標示)
+            - 解釋錯誤
+
+            ## 第三階段：學習資源
+            - 推薦升級詞組 (Level 4-5 單字)
+            - 實用加分句型
+
             請輸出完整 Markdown 報告。
             """
 
-            with st.spinner(f"AI 名師正在閱卷中..."):
+            with st.spinner(f"AI 閱卷官正在嚴格評分中..."):
                 result = call_gemini_api(system_prompt, api_key, model_option)
                 
                 if "⚠️" in result:
                     st.error(result)
                 else:
-                    # 📌 功能改進：將結果區分為「視覺化分數」與「詳細報告」
                     st.divider()
-                    st.success("🎉 批改完成！請查看下方分析：")
+                    st.success("🎉 閱卷完成！")
                     
-                    # 嘗試從文字中提取分數 (簡單的正則表達式)
-                    # 這是一個小技巧，讓分數可以變成漂亮的儀表板
                     try:
                         scores = re.findall(r"(\w+)\s*[:：]\s*(\d+)[/-]5", result)
                         if scores and len(scores) >= 4:
@@ -228,11 +279,18 @@ However, despite the convenience robots may bring, I am worried that they might 
                             for i, (cat, score) in enumerate(scores[:4]):
                                 cols[i].metric(label=cat, value=f"{score} / 5")
                     except:
-                        pass # 如果提取失敗，就直接顯示全文，不影響運作
+                        pass
                     
-                    # 顯示完整 Markdown 結果
                     st.markdown(result)
+                    
+                    # 🔥 修改處：新增正式聲明，移除重選模型
+                    st.divider()
+                    st.caption("📢 本批改結果嚴格依據大學入學考試中心（CEEC）英文作文評分標準與 113 年學測得分統計數據進行運算，僅供學習參考。")
 
-                    # 這裡可以加入下一步建議的按鈕
-                    with st.expander("🤔 覺得評分不準？"):
-                        st.info("你可以嘗試在左側切換不同的 AI 模型 (如 gemini-2.5-pro) 再批改一次。")
+# --- 頁尾署名 ---
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #888; font-size: 14px;'>
+    製作者：中央大學資管系二年級 蔡仁懋
+</div>
+""", unsafe_allow_html=True)
