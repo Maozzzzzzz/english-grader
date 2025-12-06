@@ -1,3 +1,9 @@
-streamlit
-google-generativeai>=0.8.3
-plotly
+streamlit google-generativeai>=0.8.3 plotly
+#### 第二步：設定 Streamlit 保險箱 (這步做完就再也不用改鑰匙了！)
+1.  去申請一把**全新**的 API Key。
+2.  回到 Streamlit 網頁 (顯示錯誤的那個頁面)。
+3.  點右下角 **Manage app** -> 三個點點 **⋮** -> **Settings**。
+4.  點 **Secrets** 分頁。
+5.  在黑色框框貼上：
+    ```toml
+    GEMINI_API_KEY = "你的新API_KEY貼在這裡"
