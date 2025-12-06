@@ -18,56 +18,79 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 🔥🔥🔥 這裡就是解決問題的關鍵！讓使用者可以自己切換模型 🔥🔥🔥
-    st.subheader("🤖 AI 模型選擇 (如果失敗請換一個)")
+    # 🔥🔥🔥 API 健檢工具 🔥🔥🔥
+    st.subheader("🔍 API 健檢 (如果一直失敗請按這)")
+    if st.button("檢測我的 API Key"):
+        if not api_key:
+            st.error("請先輸入 API Key！")
+        else:
+            try:
+                # 直接問 Google：這把鑰匙能用哪些模型？
+                check_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                resp = requests.get(check_url)
+                
+                if resp.status_code == 200:
+                    data = resp.json()
+                    models = [m['name'].replace('models/', '') for m in data.get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
+                    st.success(f"✅ 驗證成功！你的鑰匙可以使用以下模型：")
+                    st.code(models)
+                    st.info("請在下方選單選擇列表中的其中一個模型。")
+                else:
+                    st.error(f"❌ 鑰匙無效或專案設定錯誤。\n錯誤代碼: {resp.status_code}\n回應: {resp.text}")
+                    st.warning("👉 請務必在 Google AI Studio 選擇『Create project (建立新專案)』來產生鑰匙！")
+            except Exception as e:
+                st.error(f"檢測時發生錯誤: {e}")
+
+    st.markdown("---")
+    
+    st.subheader("🤖 AI 模型選擇")
     model_option = st.selectbox(
         "請選擇模型：",
         [
-            "gemini-1.5-flash",       # 最新最快 (預設)
-            "gemini-1.5-flash-001",   # 穩定版 Flash
-            "gemini-1.5-pro",         # 更聰明但慢一點
-            "gemini-pro"              # 舊版但最穩定
+            "gemini-1.5-flash",       # 首選
+            "gemini-1.5-pro",         # 次選
+            "gemini-1.0-pro",         # 舊版
+            "gemini-pro"              # 最舊版
         ],
-        help="如果出現 404 錯誤，請嘗試切換到其他模型"
+        help="如果預設的不能用，請試試看其他的，或使用上方的健檢工具查看可用模型。"
     )
     
     st.markdown("---")
-    st.subheader("📚 大考中心評分機制")
+    st.subheader("📚 官方評量重點")
     st.info("""
-    本系統嚴格依照大學入學考試中心（CEEC）英文作文評分標準進行批改，滿分 20 分。
+    **核心原則 (由重到輕)：**
+    1. **溝通有效性**：是否清楚傳達想法？
+    2. **正確與自然**：語法是否正確？
+    3. **詞彙與句構**：是否精準運用高中詞彙？
+    4. **文體與創意**：修辭是否優美？
     
-    **四大評分項目 (各佔 0~5 分)：**
-    
-    1. **內容**: 是否切題？論點是否有具體細節支持？
-    2. **組織**: 結構是否連貫？轉折詞使用是否流暢？
-    3. **文法**: 正確性與句型變化。
-    4. **字彙**: 用字精準度與拼字正確性。
+    *依據高中英語文參考詞彙表 (約 6000 字) 為基準。*
     """)
 
 st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
 st.markdown("### 專為台灣高中生打造，你的 24 小時專屬英文家教！")
-st.markdown("由 AI 名師提供「手術式」精準批改，直擊你的寫作痛點。")
 
 # 初始化 Session State
 if 'generated_topic' not in st.session_state:
     st.session_state.generated_topic = ""
 
-# --- 核心功能：萬能連線函數 (支援切換模型) ---
+# --- 核心功能：萬能連線函數 ---
 def call_gemini_api(prompt, key, model_name):
-    # 使用使用者選擇的模型名稱
+    # 建構 URL
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
     
     headers = {'Content-Type': 'application/json'}
+    # 設定參數 (降低隨機性，讓評分穩定)
     data = {
-        "contents": [{
-            "parts": [{"text": prompt}]
-        }]
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "temperature": 0.7
+        }
     }
     
     try:
         response = requests.post(url, headers=headers, json=data)
         
-        # 檢查是否成功
         if response.status_code == 200:
             result = response.json()
             try:
@@ -75,7 +98,6 @@ def call_gemini_api(prompt, key, model_name):
             except (KeyError, IndexError):
                 return "⚠️ 發生錯誤：AI 回傳了怪怪的格式，請再試一次。"
         else:
-            # 回傳錯誤訊息，讓使用者知道發生什麼事
             return f"⚠️ 連線錯誤 (Status {response.status_code}): {response.text}"
             
     except Exception as e:
@@ -105,12 +127,11 @@ with tab1:
                     2. 清楚列出「第一段」與「第二段」必須涵蓋的內容。
                     請直接輸出題目內容即可，不要有多餘的開場白。
                     """
-                    # 呼叫 API，傳入使用者選擇的模型
                     result = call_gemini_api(prompt_gen, api_key, model_option)
                     
                     if "⚠️" in result:
                         st.error(result)
-                        st.warning("👉 請嘗試在左側選單切換其他模型 (例如 gemini-pro)")
+                        st.warning("👉 請使用左側的『API 健檢』功能來檢查鑰匙是否有效！")
                     else:
                         st.session_state.generated_topic = result
         
@@ -134,22 +155,44 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
+            # 這裡更新了 System Prompt，加入官方評分邏輯與 6000 單標準
             system_prompt = f"""
-            你是一位台灣頂尖的高中英文補習班名師，專精於「大學學測英文作文」。
-            你的風格專業、幽默且一針見血，目標是幫學生在學測拿到 15 級分。
-            
+            你是一位台灣頂尖的高中英文補習班名師，同時也是熟悉大考中心閱卷標準的資深閱卷老師。
+            你的目標是幫學生在學測拿到 15 級分以上的高標。
+
             【題目資訊】
             {current_topic}
             
             【學生作文】
             {user_essay}
             
-            【評分任務】
-            請依據「大考中心」評分標準進行評分 (每項 0-5 分，滿分 20)：
-            1. 內容 (Content)
-            2. 組織 (Organization)
-            3. 文法句構 (Grammar)
-            4. 字彙拼字 (Vocabulary)
+            【評量依據與核心原則】
+            1. **評量重點**：運用高中參考詞彙表 (約 6000 單) 之詞彙與語法，寫出切合主題、具一致性與連貫性的短文。
+            2. **評分優先順序 (由重到輕)**：
+               (1) **溝通有效性**：是否清楚傳達想法？(內容發展完整、切題)
+               (2) **語言正確與自然度**：語法錯誤是否影響理解？
+               (3) **詞彙層級與句構變化**：是否精準使用高中詞彙？(難字誤用扣分，正確使用加分)
+               (4) **文體優美與創意表達**
+
+            【評分任務：四大構面 (各 0-5 分，滿分 20)】
+            請嚴格依據五級分制評分：
+            
+            1. **內容 (Content)**
+               - 5-4分：主題清楚，有具體細節支持，發展完整。
+               - 3分：主題尚可，部分發展不全。
+               - 2-1分：離題或內容貧乏。
+            2. **組織 (Organization)**
+               - 5-4分：結構(開頭/發展/結尾)清楚，轉折詞(Transitions)使用自然，語意連貫。
+               - 3分：連貫性略弱。
+               - 2-1分：句子鬆散或跳躍。
+            3. **文法句構 (Grammar)**
+               - 5-4分：句型多樣，錯誤極少且不影響理解。
+               - 3分：有些錯誤但文意清楚。
+               - 2-1分：錯誤頻繁影響理解。
+            4. **字彙拼字 (Vocabulary)**
+               - 5-4分：用字精準自然，詞彙運用得體。
+               - 3分：用字單調或重複。
+               - 2-1分：詞性錯誤或拼字頻繁錯誤。
             
             **分數控制**：中位數約 12 分，15 分以上為高標。
 
@@ -163,10 +206,10 @@ with tab2:
             - **字彙**: [分數]/5
 
             ## 📝 名師總評
-            (約 100 字，先肯定優點，再指出主要弱點。)
+            (約 100 字，請以閱卷老師的角度，先評論「溝通有效性」與「結構」，再評論「語言正確性」。語氣專業、鼓勵但嚴格。)
 
             ## 🔍 手術式批改 (重點改進)
-            (請挑出 3 個最具代表性的錯誤或可升級的句子)
+            (請挑出 3 個最具代表性的錯誤，針對「詞彙誤用」、「中式英文」或「句構鬆散」進行修正)
             **1. [分類]**
             > **原文**: "..."
             > **❌ 問題**: ...
@@ -175,14 +218,14 @@ with tab2:
             (重複 3 次)
 
             ## 🚀 下一步練習建議
+            (針對學生的弱點，給出一個具體建議，例如：「多練習轉折詞的使用」、「加強 4500-6000 單的搭配詞運用」)
             """
 
-            with st.spinner(f"AI 名師 ({model_option}) 正在批改中..."):
-                # 呼叫 API，傳入使用者選擇的模型
+            with st.spinner(f"AI 名師 ({model_option}) 正在依據大考中心標準閱卷中..."):
                 result = call_gemini_api(system_prompt, api_key, model_option)
                 
                 if "⚠️" in result:
                     st.error(result)
-                    st.warning("👉 請嘗試在左側選單切換其他模型 (例如 gemini-pro)")
+                    st.warning("👉 請使用左側的『API 健檢』功能來檢查鑰匙是否有效！")
                 else:
                     st.markdown(result)
