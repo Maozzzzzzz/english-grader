@@ -41,8 +41,13 @@ st.markdown("""
         color: #888;
         font-size: 12px;
         padding: 10px;
-        background-color: transparent;
-        pointer-events: none; /* 讓點擊穿透 */
+        background-color: #ffffff; /* 加個背景色比較清楚 */
+        border-top: 1px solid #eee;
+        z-index: 999;
+    }
+    /* 避免內容被 footer 擋住 */
+    .block-container {
+        padding-bottom: 60px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -86,25 +91,24 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 將評分標準放入側邊欄，隨時可參考
-    with st.expander("📚 大考中心評分標準 (點擊展開)"):
+    # 🔥 修正：側邊欄評分標準改回四大項 (0-5分) 🔥
+    with st.expander("📚 大考中心評分標準 (四大項)", expanded=True):
         st.markdown("""
-        **依據 113 年學測統計數據校正：**
+        **1. 內容 (Content) 0-5分**
+        - 主題清楚切題？
+        - 論點是否有具體細節支持？
         
-        **🏆 頂標 (15-20分)**
-        - 僅前 **7.8%** 考生。
-        - 內容深刻、文法零失誤、修辭優美。
+        **2. 組織 (Organization) 0-5分**
+        - 結構完整 (開頭/發展/結尾)？
+        - 轉折語 (Transitions) 使用流暢？
         
-        **👍 前標 (12-14分)**
-        - 約前 **20%** 考生。
-        - 結構完整、錯誤極少。
+        **3. 文法句構 (Grammar) 0-5分**
+        - 文法正確性？
+        - 句型變化的豐富度？
         
-        **😐 均標 (9-11分)**
-        - 約 **50%** 考生落點。
-        - 溝通清楚，但有明顯文法錯誤或用字單調。
-        
-        **📉 後標 (0-8分)**
-        - 內容貧乏或嚴重離題。
+        **4. 字彙拼字 (Vocabulary) 0-5分**
+        - 用字精準度與搭配詞？
+        - 拼字與大小寫正確性？
         """)
 
 st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
@@ -202,6 +206,8 @@ with tab2:
             st.session_state.essay_content = """I think that robots will become helpful assistants in our future daily lives. For example, they can help us do household chores, such as sweeping the floor, washing the dishes, and taking out the garbage. With their assistance, we can save a lot of time and energy to do other meaningful things.
 
 However, despite the convenience robots may bring, I am worried that they might make us lazy. If we rely on them too much, we might lose the ability to take care of ourselves. Therefore, while enjoying the benefits of technology, we should also remind ourselves not to be overly dependent on it."""
+            # 🔥 修正：強制刷新頁面，讓下方的 text_area 吃到新的 session_state 🔥
+            st.rerun()
 
     user_essay = st.text_area(
         "請在此輸入英文作文：", 
@@ -294,14 +300,13 @@ However, despite the convenience robots may bring, I am worried that they might 
                     
                     st.markdown(result)
                     
-                    # 🔥 修改處：新增正式聲明，移除重選模型
                     st.divider()
                     st.caption("📢 本批改結果嚴格依據大學入學考試中心（CEEC）英文作文評分標準與 113 年學測得分統計數據進行運算，僅供學習參考。")
 
 # --- 頁尾署名 ---
 st.markdown("---")
 st.markdown("""
-<div style='text-align: center; color: #888; font-size: 14px;'>
+<div class='footer'>
     製作者：中央大學資管系二年級 蔡仁懋
 </div>
 """, unsafe_allow_html=True)
