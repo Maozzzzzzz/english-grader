@@ -2,19 +2,13 @@ import streamlit as st
 import requests
 import json
 import re # 用於計算字數
-import plotly.graph_objects as go # 用於繪製雷達圖
 
 # ==========================================
-# 👇👇👇 安全版設定：自動從 Streamlit 後台讀取密碼 👇👇👇
-try:
-    # 程式會自動去抓你剛剛在 Secrets 填寫的 "GEMINI_API_KEY"
-    PROJECT_API_KEY = st.secrets["GEMINI_API_KEY"]
-except:
-    # 如果沒抓到（例如你在自己電腦跑且沒設定），就留空
-    PROJECT_API_KEY = "" 
+# 👇👇👇 專題設定區 (已填入你的新 API Key) 👇👇👇
+PROJECT_API_KEY = "AIzaSyA3OBTPr43OSEmbSS0k_nnd_D7n7yGZCpw"
 # ==========================================
 
-# 頁面設定 (加入 initial_sidebar_state="expanded" 讓側邊欄預設展開)
+# 頁面設定
 st.set_page_config(
     page_title="英級棒!! 學測英文作文AI批改APP", 
     page_icon="💯", 
@@ -46,30 +40,17 @@ st.markdown("""
         color: #888;
         font-size: 12px;
         padding: 10px;
-        background-color: #ffffff;
-        border-top: 1px solid #eee;
-        z-index: 100;
-    }
-    /* 避免 footer 擋住內容 */
-    .block-container {
-        padding-bottom: 80px;
+        background-color: transparent;
+        pointer-events: none; /* 讓點擊穿透 */
     }
 </style>
 """, unsafe_allow_html=True)
-
-# --- Session State 初始化 ---
-if 'generated_topic' not in st.session_state:
-    st.session_state.generated_topic = ""
-if 'essay_content' not in st.session_state:
-    st.session_state.essay_content = ""
-if 'grading_result' not in st.session_state:
-    st.session_state.grading_result = ""
 
 # --- 側邊欄設計 ---
 with st.sidebar:
     st.title("⚙️ 設定與評分標準")
     
-    # 判斷是否有內建 Key (現在是從 Secrets 讀取)
+    # 判斷是否有內建 Key
     if PROJECT_API_KEY:
         api_key = PROJECT_API_KEY
         st.success("✅ 已啟用專題展示模式")
@@ -104,7 +85,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 評分標準
+    # 將評分標準放入側邊欄
     with st.expander("📚 大考中心評分標準 (點擊展開)"):
         st.markdown("""
         **依據 113 年學測統計數據校正：**
@@ -128,6 +109,12 @@ with st.sidebar:
 st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
 st.caption("專為台灣高中生打造，依照大考中心數據嚴格校正的模擬閱卷系統。")
 
+# 初始化 Session State
+if 'generated_topic' not in st.session_state:
+    st.session_state.generated_topic = ""
+if 'essay_content' not in st.session_state:
+    st.session_state.essay_content = ""
+
 # --- 核心功能：萬能連線函數 ---
 def call_gemini_api(prompt, key, model_name):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
@@ -148,39 +135,6 @@ def call_gemini_api(prompt, key, model_name):
             return f"⚠️ 連線錯誤: {response.text}"
     except Exception as e:
         return f"⚠️ 系統錯誤: {str(e)}"
-
-# 繪製雷達圖函數
-def plot_radar_chart(scores):
-    categories = ['內容', '組織', '文法', '字彙']
-    score_values = [int(s) for s in scores[:4]]
-    # 補足數據長度
-    while len(score_values) < 4:
-        score_values.append(0)
-    
-    # 封閉雷達圖
-    score_values.append(score_values[0])
-    categories.append(categories[0])
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatterpolar(
-        r=score_values,
-        theta=categories,
-        fill='toself',
-        name='得分',
-        line_color='#FF4B4B'
-    ))
-
-    fig.update_layout(
-        polar=dict(
-            radialaxis=dict(
-                visible=True,
-                range=[0, 5]
-            )),
-        showlegend=False,
-        margin=dict(l=40, r=40, t=20, b=20),
-        height=300
-    )
-    return fig
 
 # 分頁設計
 tab1, tab2 = st.tabs(["🎲 題目設定", "✍️ 作文批改區"])
@@ -211,9 +165,9 @@ with tab1:
                     1. **絕對不要**提到「隨機選出」或「主題是...」這類字眼。直接給題目。
                     2. **全中文**描述，模擬學測考卷的題目呈現方式。
                     3. 格式必須包含：
-                       - 題目引文 (約 50 字，設定情境)
-                       - 第一段引導 (說明應包含的內容)
-                       - 第二段引導 (說明應包含的內容)
+                        - 題目引文 (約 50 字，設定情境)
+                        - 第一段引導 (說明應包含的內容)
+                        - 第二段引導 (說明應包含的內容)
                     
                     範例格式：
                     提示：在成長過程中，我們常面臨...
@@ -247,7 +201,6 @@ with tab2:
             st.session_state.essay_content = """I think that robots will become helpful assistants in our future daily lives. For example, they can help us do household chores, such as sweeping the floor, washing the dishes, and taking out the garbage. With their assistance, we can save a lot of time and energy to do other meaningful things.
 
 However, despite the convenience robots may bring, I am worried that they might make us lazy. If we rely on them too much, we might lose the ability to take care of ourselves. Therefore, while enjoying the benefits of technology, we should also remind ourselves not to be overly dependent on it."""
-            st.rerun()
 
     user_essay = st.text_area(
         "請在此輸入英文作文：", 
@@ -325,45 +278,23 @@ However, despite the convenience robots may bring, I am worried that they might 
                 if "⚠️" in result:
                     st.error(result)
                 else:
-                    st.session_state.grading_result = result
-
-    # 顯示結果區 (包含雷達圖與下載按鈕)
-    if st.session_state.grading_result:
-        st.divider()
-        st.success("🎉 閱卷完成！")
-        
-        # 繪製雷達圖
-        try:
-            raw_scores = re.findall(r"[:：]\s*(\d)\s*/\s*5", st.session_state.grading_result)
-            if len(raw_scores) >= 4:
-                col_chart, col_text = st.columns([1, 2])
-                with col_chart:
-                    fig = plot_radar_chart(raw_scores)
-                    st.plotly_chart(fig, use_container_width=True)
-                with col_text:
-                    cats = ["內容", "組織", "文法", "字彙"]
-                    c1, c2 = st.columns(2)
-                    for i in range(4):
-                        if i < 2:
-                            c1.metric(cats[i], f"{raw_scores[i]} / 5")
-                        else:
-                            c2.metric(cats[i], f"{raw_scores[i]} / 5")
-        except:
-            pass
-        
-        st.markdown(st.session_state.grading_result)
-        
-        # 下載按鈕
-        st.download_button(
-            label="📥 下載閱卷報告 (.md)",
-            data=st.session_state.grading_result,
-            file_name="essay_feedback.md",
-            mime="text/markdown"
-        )
-        
-        # 頁尾聲明
-        st.divider()
-        st.caption("📢 本批改結果嚴格依據大學入學考試中心（CEEC）英文作文評分標準與 113 年學測得分統計數據進行運算，僅供學習參考。")
+                    st.divider()
+                    st.success("🎉 閱卷完成！")
+                    
+                    try:
+                        scores = re.findall(r"(\w+)\s*[:：]\s*(\d+)[/-]5", result)
+                        if scores and len(scores) >= 4:
+                            c1, c2, c3, c4 = st.columns(4)
+                            cols = [c1, c2, c3, c4]
+                            for i, (cat, score) in enumerate(scores[:4]):
+                                cols[i].metric(label=cat, value=f"{score} / 5")
+                    except:
+                        pass
+                    
+                    st.markdown(result)
+                    
+                    st.divider()
+                    st.caption("📢 本批改結果嚴格依據大學入學考試中心（CEEC）英文作文評分標準與 113 年學測得分統計數據進行運算，僅供學習參考。")
 
 # --- 頁尾署名 ---
 st.markdown("---")
