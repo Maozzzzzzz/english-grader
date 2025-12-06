@@ -19,7 +19,7 @@ with st.sidebar:
     st.markdown("---")
     
     # 🔥🔥🔥 API 健檢工具 🔥🔥🔥
-    st.subheader("🔍 API 健檢 (如果一直失敗請按這)")
+    st.subheader("🔍 API 健檢")
     if st.button("檢測我的 API Key"):
         if not api_key:
             st.error("請先輸入 API Key！")
@@ -32,27 +32,35 @@ with st.sidebar:
                 if resp.status_code == 200:
                     data = resp.json()
                     models = [m['name'].replace('models/', '') for m in data.get('models', []) if 'generateContent' in m.get('supportedGenerationMethods', [])]
-                    st.success(f"✅ 驗證成功！你的鑰匙可以使用以下模型：")
+                    st.success(f"✅ 驗證成功！你的帳號支援 {len(models)} 個模型。")
                     st.code(models)
-                    st.info("請在下方選單選擇列表中的其中一個模型。")
                 else:
-                    st.error(f"❌ 鑰匙無效或專案設定錯誤。\n錯誤代碼: {resp.status_code}\n回應: {resp.text}")
-                    st.warning("👉 請務必在 Google AI Studio 選擇『Create project (建立新專案)』來產生鑰匙！")
+                    st.error(f"❌ 檢測失敗 (代碼 {resp.status_code}): {resp.text}")
             except Exception as e:
                 st.error(f"檢測時發生錯誤: {e}")
 
     st.markdown("---")
     
     st.subheader("🤖 AI 模型選擇")
+    # 這裡更新為你帳號實際擁有的模型列表
+    # 我將最新的 2.5 和 2.0 系列放在最前面
+    user_available_models = [
+        'gemini-2.5-flash', 
+        'gemini-2.5-pro', 
+        'gemini-2.0-flash', 
+        'gemini-2.0-flash-lite',
+        'gemini-2.0-pro-exp-02-05',
+        'gemini-flash-latest', 
+        'gemini-pro-latest',
+        'gemini-1.5-flash',
+        'gemini-1.5-pro'
+    ]
+    
     model_option = st.selectbox(
         "請選擇模型：",
-        [
-            "gemini-1.5-flash",       # 首選
-            "gemini-1.5-pro",         # 次選
-            "gemini-1.0-pro",         # 舊版
-            "gemini-pro"              # 最舊版
-        ],
-        help="如果預設的不能用，請試試看其他的，或使用上方的健檢工具查看可用模型。"
+        user_available_models,
+        index=0, # 預設選第一個 (gemini-2.5-flash)
+        help="這些是你帳號目前可用的最新模型，建議使用 2.5 或 2.0 系列。"
     )
     
     st.markdown("---")
@@ -131,7 +139,7 @@ with tab1:
                     
                     if "⚠️" in result:
                         st.error(result)
-                        st.warning("👉 請使用左側的『API 健檢』功能來檢查鑰匙是否有效！")
+                        st.warning("👉 請在左側切換其他模型試試看！")
                     else:
                         st.session_state.generated_topic = result
         
@@ -226,6 +234,6 @@ with tab2:
                 
                 if "⚠️" in result:
                     st.error(result)
-                    st.warning("👉 請使用左側的『API 健檢』功能來檢查鑰匙是否有效！")
+                    st.warning("👉 請嘗試在左側切換其他模型！")
                 else:
                     st.markdown(result)
