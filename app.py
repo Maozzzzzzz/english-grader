@@ -12,6 +12,7 @@ st.set_page_config(
 # --- 側邊欄設計 ---
 with st.sidebar:
     st.title("⚙️ 設定")
+    # 加入 .strip() 自動去除前後空白，防止複製錯誤
     api_key_input = st.text_input("請輸入 Google API Key", type="password", help="請前往 Google AI Studio 免費申請")
     api_key = api_key_input.strip() if api_key_input else ""
     
