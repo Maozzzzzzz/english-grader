@@ -33,52 +33,79 @@ def get_random_api_key():
 PROJECT_API_KEY = get_random_api_key()
 
 # ==========================================
-# CSS 優化 (修復深色模式字體看不見的問題 + 強制全白)
+# CSS 優化 (完全自適應淺色/深色模式)
 # ==========================================
 st.markdown("""
 <style>
     /* 修正輸入框字體大小 */
     .stTextArea textarea { font-size: 16px !important; line-height: 1.5 !important; }
     
-    /* 修正指標卡片 */
-    .metric-card { background-color: #262730; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+    /* 修正指標卡片 (Metric Card) 
+       使用 var(--secondary-background-color) 讓它自動適應：
+       - 深色模式時：它是深灰色
+       - 淺色模式時：它是淺灰色
+    */
+    .metric-card { 
+        background-color: var(--secondary-background-color); 
+        border-radius: 10px; 
+        padding: 15px; 
+        text-align: center; 
+        box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
+    }
     
-    /* 頁尾固定 */
-    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; color: #888; font-size: 12px; padding: 10px; background-color: #0e1117; pointer-events: none; border-top: 1px solid #333; z-index: 100; }
+    /* 頁尾固定 
+       使用 var(--background-color) 確保背景色跟隨主題
+    */
+    .footer { 
+        position: fixed; 
+        left: 0; 
+        bottom: 0; 
+        width: 100%; 
+        text-align: center; 
+        color: var(--text-color); /* 自動變色 */
+        font-size: 12px; 
+        padding: 10px; 
+        background-color: var(--background-color); 
+        pointer-events: none; 
+        border-top: 1px solid rgba(49, 51, 63, 0.2); 
+        z-index: 100; 
+    }
     .block-container { padding-bottom: 80px; }
     
-    /* 🔥 關鍵修正：將所有標題強制設為白色，確保深色模式可讀 🔥 */
+    /* 🔥 關鍵修正：使用 var(--text-color) 取代 #ffffff 
+       這會讓標題在深色模式變白，在淺色模式變黑
+    */
     h1, h2, h3, h4, h5, h6 {
-        color: #ffffff !important;
+        color: var(--text-color) !important;
         font-weight: 600 !important;
     }
     
-    /* 修正 Markdown 內文顏色，避免被蓋掉 */
+    /* 修正 Markdown 內文顏色 */
     p, li, span, div {
-        color: #e0e0e0 !important;
+        color: var(--text-color) !important;
         font-size: 16px !important;
     }
     
-    /* 🔥 額外修正：Streamlit 的 Widget Label (如：題目來源、輸入框標題) 🔥 */
+    /* 修正 Streamlit Widget Label */
     .stRadio label, .stTextInput label, .stTextArea label, .stSelectbox label {
-        color: #ffffff !important;
+        color: var(--text-color) !important;
         font-size: 18px !important;
         font-weight: bold !important;
     }
 
-    /* 特別針對 Streamlit 的 Tab 標籤顏色 */
+    /* Tab 標籤顏色自動適應 */
     .stTabs [data-baseweb="tab"] {
-        color: #ffffff;
+        color: var(--text-color);
     }
     
-    /* 優化 Metric 數值顏色 */
+    /* 優化 Metric 數值顏色 (保持紅色醒目，但在淺色模式也好讀) */
     [data-testid="stMetricValue"] {
         font-size: 26px !important;
-        color: #ff4b4b !important; /* 讓分數顯示為紅色醒目 */
+        color: #ff4b4b !important; 
     }
     [data-testid="stMetricLabel"] {
         font-size: 16px !important;
-        color: #ffffff !important;
+        color: var(--text-color) !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -143,7 +170,7 @@ def call_gemini_api(prompt, key, model_name):
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.3} # 🔥 溫度降到 0.3，極度冷靜與嚴格
+        "generationConfig": {"temperature": 0.3}
     }
 
     max_retries = max(3, len(keys_pool))
@@ -213,8 +240,7 @@ with tab1:
         
         if st.session_state.generated_topic:
             st.markdown(st.session_state.generated_topic)
-            # 💡 新增：字數提示區塊
-            st.info("💡 **小提醒：學測英文作文建議作答字數為 120 字以上 ，盡力發揮文筆吧!!**")
+            st.info("💡 **小提醒：學測英文作文建議作答字數為 120 字以上 (約 150-180 字為佳)，請盡量發揮！**")
             current_topic = st.session_state.generated_topic
     else:
         current_topic = st.text_area("請輸入題目說明", height=150, placeholder="例如：提示：排隊雖是生活中常有的經驗...")
@@ -241,7 +267,6 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：極度嚴格 + 白字優化 + 多樣句型版 🔥
             system_prompt = f"""
             # Role: 台灣學測英文作文「地獄級」閱卷委員 (Hell-mode Grader)
             
@@ -316,7 +341,6 @@ with tab2:
                 else:
                     st.success("🎉 閱卷完成！")
                     
-                    # 💡 新增：自動抓取分數並顯示儀表板
                     try:
                         # 使用 Regex 抓取分數
                         total_match = re.search(r"總分.*?[:：]\s*(\d+)", result)
@@ -325,14 +349,12 @@ with tab2:
                         gram_match = re.search(r"文法.*?[:：]\s*(\d+)", result)
                         vocab_match = re.search(r"字彙.*?[:：]\s*(\d+)", result)
                         
-                        # 若抓不到則顯示 N/A 或 0
                         total_score = total_match.group(1) if total_match else "N/A"
                         s_content = content_match.group(1) if content_match else "0"
                         s_org = org_match.group(1) if org_match else "0"
                         s_gram = gram_match.group(1) if gram_match else "0"
                         s_vocab = vocab_match.group(1) if vocab_match else "0"
                         
-                        # 顯示美觀的儀表板
                         st.subheader("📊 評分摘要")
                         c1, c2, c3, c4, c5 = st.columns(5)
                         c1.metric("🏆 總分", f"{total_score} / 20")
@@ -343,7 +365,7 @@ with tab2:
                         st.divider()
                         
                     except Exception as e:
-                        pass # 如果 regex 失敗，不影響後面文字輸出
+                        pass
                     
                     st.markdown(result)
                     st.divider()
