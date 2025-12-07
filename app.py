@@ -3,7 +3,7 @@ import requests
 import json
 import re
 import random
-import google.generativeai as genai
+import time
 
 # 頁面設定
 st.set_page_config(
@@ -18,14 +18,16 @@ st.set_page_config(
 # ==========================================
 def get_random_api_key():
     """
-    從 Streamlit Secrets 中讀取 API_KEY_1, API_KEY_2, API_KEY_3
+    從 Streamlit Secrets 中讀取 API_KEY_1 ~ API_KEY_5
     並隨機選出一組使用。
     """
     available_keys = []
-    # 嘗試抓取 3 把鑰匙
+    # 嘗試抓取 5 把鑰匙 + GOOGLE_API_KEY
     if "API_KEY_1" in st.secrets: available_keys.append(st.secrets["API_KEY_1"])
     if "API_KEY_2" in st.secrets: available_keys.append(st.secrets["API_KEY_2"])
     if "API_KEY_3" in st.secrets: available_keys.append(st.secrets["API_KEY_3"])
+    if "API_KEY_4" in st.secrets: available_keys.append(st.secrets["API_KEY_4"])
+    if "API_KEY_5" in st.secrets: available_keys.append(st.secrets["API_KEY_5"])
     if "GOOGLE_API_KEY" in st.secrets: available_keys.append(st.secrets["GOOGLE_API_KEY"])
     
     if available_keys:
@@ -62,7 +64,7 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 2. 模型資訊 (已改為隱藏詳細型號，僅顯示狀態)
+    # 2. 模型資訊
     st.subheader("🤖 AI 模型設定")
     target_model = "gemini-2.5-flash" 
     st.info("⚡ **AI 閱卷委員** (連線中)")
@@ -103,8 +105,6 @@ if 'essay_content' not in st.session_state:
     st.session_state.essay_content = ""
 
 # --- 核心功能：強韌連線函數 (自動重試 + 故障轉移) ---
-import time
-
 def call_gemini_api(prompt, key, model_name):
     # 準備所有可用的鑰匙清單 (從 secrets 讀取)
     keys_pool = []
@@ -115,7 +115,7 @@ def call_gemini_api(prompt, key, model_name):
     if "API_KEY_5" in st.secrets: keys_pool.append(st.secrets["API_KEY_5"])
     if "GOOGLE_API_KEY" in st.secrets: keys_pool.append(st.secrets["GOOGLE_API_KEY"])
     
-    # 如果沒有設定 secrets，就用傳進來的單一 key (可能是使用者手填的)
+    # 如果沒有設定 secrets，就用傳進來的單一 key
     if not keys_pool and key:
         keys_pool = [key]
     
@@ -124,7 +124,7 @@ def call_gemini_api(prompt, key, model_name):
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7}
+        "generationConfig": {"temperature": 0.8} # 稍微提高創造力讓題目更多元
     }
 
     # 最多嘗試 3 次 (或是鑰匙池的數量，取大者)
@@ -146,11 +146,9 @@ def call_gemini_api(prompt, key, model_name):
                     return "⚠️ AI 回傳格式錯誤，請重試。"
             
             elif response.status_code == 429:
-                # 遇到 429 (流量限制)，印出警告並等待後重試
-                # st.toast 是一個不干擾畫面的小通知
                 st.toast(f"⚠️ 鑰匙 {attempt+1} 額度耗盡，正在切換備用鑰匙...", icon="🔄")
-                time.sleep(2) # 休息 2 秒讓 API 冷卻
-                continue # 進入下一次迴圈，換下一把鑰匙
+                time.sleep(2)
+                continue
             
             else:
                 return f"⚠️ 連線錯誤 (Status {response.status_code}): {response.text}"
@@ -177,26 +175,33 @@ with tab1:
             if not PROJECT_API_KEY:
                 st.error("❌ 請先設定 API Key")
             else:
-                # 🔄 修改點 1: spinner 文字改為「AI 閱卷委員」
                 with st.spinner("AI 閱卷委員正在隨機設計多元題目..."):
-                    # 🔥 題目 Prompt：多元主題 🔥
+                    # 🔥 題目 Prompt：強制全中文 + 多元主題 🔥
                     prompt_gen = """
-                    角色：你是一位創意豐富的高中英文學測出題老師。
-                    任務：請「隨機」從以下類別中挑選一個，設計一個符合台灣高中生生活經驗的英文作文題目：
-                    1. **食衣住行育樂** (例如：夜市小吃、捷運文化、網購經驗、國內旅遊)
-                    2. **台灣特色** (例如：便利商店的便利性、傳統節慶如中秋烤肉、手搖飲文化)
-                    3. **校園生活與人際** (例如：社團活動、考試壓力、與同學的衝突、好朋友的特質)
-                    4. **時事與社會觀察** (例如：博愛座爭議、外送平台興起、氣候變遷的感受)
-                    5. **親情與家庭** (例如：與長輩的代溝、一次難忘的家庭聚餐、做家事的體悟)
-                    6. **自我成長** (例如：如何面對失敗、學會獨處、未來的夢想)
-
-                    請確保題目多樣化，且引導明確讓學生知道寫作重點
+                    角色：你是一位創意豐富的台灣高中英文學測出題老師。
+                    任務：請「隨機」從以下類別中挑選一個，設計一個符合台灣高中生生活經驗的英文作文題目。
                     
-                    輸出格式要求：
-                    1. 不需顯示你選了哪個類別。
-                    2. 題目引文 (約 50-80 字，全中文，模擬考卷語氣)。
-                    3. 第一段引導 (說明應包含的內容)。
-                    4. 第二段引導 (說明應包含的內容)。
+                    類別池：
+                    1. **食衣住行育樂** (夜市、捷運、網購、旅遊)
+                    2. **台灣特色** (便利商店、傳統節慶、手搖飲)
+                    3. **校園生活** (社團、考試、人際關係)
+                    4. **社會觀察** (博愛座、AI影響、環保)
+                    5. **自我成長** (面對失敗、夢想、時間管理)
+
+                    ⚠️ **嚴格規範 (Strict Rules)**:
+                    1. **所有說明文字必須是「繁體中文」**。
+                    2. 絕對不要出現 "In your first paragraph..." 這種英文指令。
+                    3. 請模仿大考中心的出題語氣。
+
+                    輸出格式範本：
+                    --------------------------------
+                    **題目說明**：
+                    [這裡放約 50-80 字的題目引言，全中文]
+
+                    **寫作引導**：
+                    第一段請說明...[全中文說明]
+                    第二段請描述...[全中文說明]
+                    --------------------------------
                     """
                     current_key = get_random_api_key() or PROJECT_API_KEY
                     result = call_gemini_api(prompt_gen, current_key, target_model)
@@ -231,7 +236,7 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：動態常模校正 + 視覺優化版 (強制列表換行) 🔥
+            # 🔥 批改 Prompt：強化學習回饋版 (Level 5-6 單字庫 + 詳細解析) 🔥
             system_prompt = f"""
             # Role: 台灣學測英文作文資深閱卷委員 (Senior Grader)
             
@@ -240,31 +245,18 @@ with tab2:
             【學生作文】{user_essay}
             
             # 📊 113年學測評分常模 (Norm-Referenced Grading):
-            請依照以下「考生累計百分比」來決定分數落點，而非單純的扣分制。
-            寫得好就該給高分，但請記住「高分群」是非常稀有的。
-
-            1. **【18-20 分 (神級)】**: 
-               - **稀有度**: 全台前 0.6% (極其罕見)。
-               - **標準**: 思想深刻、修辭優美、幾乎無懈可擊。若文章具備這種「出版等級」的品質，請大方給分。
-            
-            2. **【15-17 分 (頂標)】**:
-               - **稀有度**: 全台前 7.8% (頂尖高手)。
-               - **標準**: 內容豐富、組織嚴謹。允許極少數不影響理解的微小瑕疵（Slip-ups），整體讀起來非常流暢道地。
-
-            3. **【12-14 分 (前標)】**:
-               - **稀有度**: 全台前 27%。
-               - **標準**: 結構完整，論點清楚。可能有少許文法錯誤或用字不夠精準，但不影響閱讀。
-
-            4. **【8-11 分 (均標)】**:
-               - **稀有度**: 中段 50%。
-               - **標準**: 能溝通，但句型單調、中式英文明顯，或有頻繁的基礎文法錯誤。
+            請依照以下「考生累計百分比」來決定分數落點。
+            1. **【18-20 分 (神級)】**: 全台前 0.6%。思想深刻、修辭優美、幾乎無懈可擊。
+            2. **【15-17 分 (頂標)】**: 全台前 7.8%。內容豐富、組織嚴謹。允許極少數微小瑕疵。
+            3. **【12-14 分 (前標)】**: 全台前 27%。結構完整，論點清楚。可能有少許文法錯誤。
+            4. **【8-11 分 (均標)】**: 中段 50%。能溝通，但句型單調或有明顯文法錯誤。
 
             # Task: 產出結構化的 Markdown 批改報告
             
             ## Part 1: 總分與點評
-            請給出總分 (0-20)，並用一句話描述這篇文章在全體考生中的「落點位置」。(例如：「這篇文章已經達到全國前 10% 的水準，用字精準...」)
+            請給出總分 (0-20)，並用一句話描述這篇文章在全體考生中的「落點位置」。
             
-            ## Part 2: 四大構面評分 (請務必依照上述常模給分 0-5)
+            ## Part 2: 四大構面評分 (0-5分)
             - 內容: [分數] (簡評)
             - 組織: [分數] (簡評)
             - 文法: [分數] (簡評)
@@ -272,27 +264,32 @@ with tab2:
             
             ## Part 3: 逐句訂正 (Visual Correction)
             請找出文中 3-5 個最需要改進的句子。
-            **⚠️ 排版嚴格要求：請對每一行使用 Markdown 列表符號「-」開頭，確保每一項都強制換行顯示。**
+            **⚠️ 排版要求：請使用 Markdown 列表符號「-」開頭，確保換行。**
             
-            格式範例 (請嚴格遵守)：
+            格式範例：
             > ### 🚩 改進點 1
-            > - 🔴 **原句**: :red[He go to school yesterday.]
-            > - 🟢 **訂正**: :green[He **went** to school yesterday.]
-            > - 💡 **解析**: 這裡發生了時態錯誤。因為 yesterday 是過去時間，動詞 go 必須改為過去式 went。
+            > - 🔴 **原句**: :red[He go to school.]
+            > - 🟢 **訂正**: :green[He **went** to school.]
+            > - 💡 **解析**: 這裡發生了時態錯誤... (請用繁體中文詳細解釋文法規則，讓學生能學到東西)
             
-            > ### 🚩 改進點 2
-            > - 🔴 **原句**: :red[...]
-            > - 🟢 **訂正**: :green[...]
-            > - 💡 **解析**: ...
+            ## Part 4: 升級與加分 (Advanced Vocabulary & Phrasing)
+            **請提供 3 個 Level 5-6 (指考/托福等級) 的高級詞彙替換建議，需包含詞性與解釋。**
             
-            (以此類推)
+            格式範例：
+            > ### 🌟 升級建議 1
+            > - 🔹 **原文**: :blue[very good]
+            > - 🚀 **升級**: **impeccable** (adj. 無懈可擊的)
+            > - 📝 **解析**: "very good" 太過平淡。**Impeccable** 強調完美無缺，適合用來形容表現或品質，能展現更高級的程度副詞運用。
             
-            ## Part 4: 升級與加分
-            - 📖 **替換字彙**: :blue[原本字詞] -> **高級字詞** (提供 3 組)
-            - ✍️ **加分句型**: 提供一個適合本文的高級句型或諺語。
+            > ### 🌟 升級建議 2
+            > - 🔹 **原文**: ...
+            > - 🚀 **升級**: ...
+            > - 📝 **解析**: ...
+            
+            > ### ✍️ 實用加分句型
+            > - (提供一個與文章主題相關的高級句型或諺語，並解釋用法)
             """
             
-            # 🔄 修改點 2: spinner 文字改為「AI 閱卷委員」
             with st.spinner("AI 閱卷委員正在嚴格閱卷中..."):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
