@@ -33,7 +33,7 @@ def get_random_api_key():
 PROJECT_API_KEY = get_random_api_key()
 
 # ==========================================
-# CSS 優化 (修復深色模式字體看不見的問題)
+# CSS 優化 (修復深色模式字體看不見的問題 + 強制全白)
 # ==========================================
 st.markdown("""
 <style>
@@ -54,11 +54,18 @@ st.markdown("""
     }
     
     /* 修正 Markdown 內文顏色，避免被蓋掉 */
-    p, li, span {
+    p, li, span, div {
         color: #e0e0e0 !important;
         font-size: 16px !important;
     }
     
+    /* 🔥 額外修正：Streamlit 的 Widget Label (如：題目來源、輸入框標題) 🔥 */
+    .stRadio label, .stTextInput label, .stTextArea label, .stSelectbox label {
+        color: #ffffff !important;
+        font-size: 18px !important;
+        font-weight: bold !important;
+    }
+
     /* 特別針對 Streamlit 的 Tab 標籤顏色 */
     .stTabs [data-baseweb="tab"] {
         color: #ffffff;
@@ -126,7 +133,7 @@ def call_gemini_api(prompt, key, model_name):
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4} # 🔥 溫度降到 0.4，讓評分更冷靜客觀
+        "generationConfig": {"temperature": 0.3} # 🔥 溫度降到 0.3，極度冷靜與嚴格
     }
 
     max_retries = max(3, len(keys_pool))
@@ -170,7 +177,7 @@ with tab1:
                 with st.spinner("AI 閱卷委員正在出題..."):
                     prompt_gen = """
                     角色：大考中心出題委員。
-                    任務：隨機設計一個學測英文作文題目 (食/衣/住/行/文化/校園/時事/成長)，題目越多元、生活化越好，不要僅限於自我成長的範圍。
+                    任務：隨機設計一個學測英文作文題目 (食/衣/住/行/文化/校園/時事/成長)，題目越多元、生活化越好。
                     
                     ⚠️ **Strict Output Rules (嚴格輸出規範)**:
                     1. **禁止** 任何開場白。
@@ -222,35 +229,33 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：殘酷評分 + 字體白化 + 句型擴充版 🔥
+            # 🔥 批改 Prompt：極度嚴格 + 白字優化 + 多樣句型版 🔥
             system_prompt = f"""
-            # Role: 台灣學測英文作文「殘酷」閱卷委員 (Ruthless Grader)
+            # Role: 台灣學測英文作文「地獄級」閱卷委員 (Hell-mode Grader)
             
             # Context:
             【題目】{current_topic}
             【學生作文】{user_essay}
             
-            # ⚠️ 評分邏輯修正：起點錨定法 (Anchor Pricing)
-            **請預設這篇文章只有 10 分 (均標)。**
-            除非你能找到「極具說服力」的證據證明它值得更高分，否則不要加分。
+            # ⚠️ 評分邏輯 (Strict Scoring Protocol):
+            **基準分：10分(大部分高中生的起點)**
             
-            1. **【15-20 分 (神級)】**: 
-               - **條件**: 幾乎無懈可擊。用字如 native speaker 般精準，句型變化多端。
-               - **現實**: 只有不到 7% 的人能拿到。**若有任何明顯文法錯，絕不給此區間。**
+            **1. 分數天花板 (Score Ceiling) - 必須嚴格執行**:
+            - ❌ **上限 11 分**: 如果文章用字僅限於國中程度 (good, bad, happy, think) 且缺乏句型變化。
+            - ❌ **上限 14 分**: 如果文章通順，但出現許多明顯文法錯誤 (時態、單複數)。
+            - ✅ **15 分以上**: 必須同時滿足「思想有深度」+「用字精準 (Level 5-6)」+「僅有些許文法錯誤」。
             
-            2. **【12-14 分 (前標)】**:
-               - **條件**: 結構完整，論點清楚。
-               - **現實**: 這是「好學生」的天花板。普通的通順文章頂多 12 分。
-            
-            3. **【8-11 分 (均標)】**:
-               - **條件**: 能溝通，但用字平淡 (good, bad, happy)，或有中式英文。
-               - **現實**: **這是大多數高中生的落點。請勇敢給出 10 分或 11 分。**
+            **2. 常模分佈**:
+            - 15-20分: 前 7% (極稀有，不要輕易給)。
+            - 12-14分: 前 27% (頂標/前標)。
+            - 9-11分: 中段班 (大多數落點)。
+            - 8分以下: 基礎不穩。
 
             # Task: 產出結構化的 Markdown 批改報告
             
             ## Part 1: 總分與犀利點評
             總分 (0-20)：[分數]
-            一句話點評：(請用嚴格的角度，直接點出這篇文章為什麼拿不到更高分，例如：「雖然通順，但用字過於國中程度，無法進入前標。」)
+            一句話點評：(請用嚴格的角度，直接點出缺點，例如：「雖然結構完整，但用字過於淺顯，像國中生作文，無法拿到高分。」)
             
             ## Part 2: 四大構面評分 (0-5分)
             - 內容: [分數] 
@@ -276,21 +281,21 @@ with tab2:
             > - 📝 **解析**: ...
             
             ## Part 5: 實用加分句型 (Bonus Sentence Patterns)
-            **請提供 3 組不同類型的高級句型，幫助學生提升文章層次。**
+            **請提供 3 組「截然不同類型」的高級句型 (例如：一組倒裝句、一組分詞構句、一組虛擬語氣)，不要重複類似結構。**
             
             > ### ✍️ 句型 1：[句型名稱，如：倒裝句]
             > - **句型結構**: [結構說明]
             > - **範例**: [造句]
-            > - **如何套用**: [說明如何用在本文]
+            > - **如何套用**: [說明如何改寫本文中的句子]
             
             > ### ✍️ 句型 2：[句型名稱，如：分詞構句]
             > - ...
             
-            > ### ✍️ 句型 3：[句型名稱，如：假設語氣]
+            > ### ✍️ 句型 3：[句型名稱]
             > - ...
             """
             
-            with st.spinner("AI 閱卷委員正在嚴格審視中 (預設分數：10分)..."):
+            with st.spinner("AI 閱卷委員正在嚴格審視中..."):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
                 
