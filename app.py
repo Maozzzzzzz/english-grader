@@ -67,6 +67,44 @@ st.markdown("""
     
     [data-testid="stMetricValue"] { font-size: 26px !important; color: #ff4b4b !important; }
     [data-testid="stMetricLabel"] { font-size: 16px !important; color: var(--text-color) !important; }
+
+    /* 🔥 新增：卡片式模組 CSS 🔥 */
+    .score-box {
+        background-color: var(--secondary-background-color);
+        padding: 15px 5px;
+        border-radius: 12px;
+        text-align: center;
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        height: 100%;
+        transition: transform 0.2s;
+    }
+    .score-box:hover {
+        transform: translateY(-5px); /* 滑鼠懸停浮起效果 */
+    }
+    .score-title {
+        font-size: 16px;
+        color: var(--text-color);
+        margin-bottom: 8px;
+        font-weight: bold;
+        opacity: 0.9;
+    }
+    .score-val {
+        font-size: 32px;
+        font-weight: 800;
+        color: #ff4b4b;
+        margin: 0;
+        line-height: 1.2;
+    }
+    .score-total {
+        border-bottom: 4px solid #ff4b4b; /* 總分底部紅線 */
+    }
+    .score-sub {
+        border-bottom: 4px solid #4facfe; /* 分項底部藍線 */
+    }
+    /* 隱藏 Streamlit 原生 Metric 以免干擾 */
+    [data-testid="stMetric"] { display: none !important; }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -262,12 +300,17 @@ with tab2:
     if word_count > 0:
         st.caption(f"📊 目前字數：{word_count} 字")
 
-    # 🚀 按鈕只負責「觸發 API」並「存入 Session」
+    # 🚀 按鈕邏輯修正：新增字數檢查 + 強制清除舊紀錄
     if st.button("🚀 開始批改", type="primary", use_container_width=True):
+        # 1. 先清空上一次的結果，避免顯示舊資料
+        st.session_state.grading_result = ""
+        
         if not PROJECT_API_KEY:
             st.error("❌ 請先設定 API Key！")
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
+        elif word_count < 30: # 🛡️ 新增防呆：字數太少直接擋掉
+            st.warning("⚠️ 文章內容過短 (少於 30 字)，無法進行有效評分，請多寫一點！")
         else:
             system_prompt = f"""
             # Role: 台灣學測英文作文「地獄級」閱卷委員
@@ -287,6 +330,7 @@ with tab2:
             
             **3. 內容與組織 (Content & Org)**:
             - 除非觀點極具深度且結構嚴謹，否則不要輕易給 5 分。
+            
             # Task: 產出 Markdown 報告
             
             ## Part 1: 總分與犀利點評
@@ -325,38 +369,69 @@ with tab2:
             with st.spinner(f"AI 閱卷委員正在嚴格審視中...\n{random.choice(tips)}"):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
-                # 💡 儲存結果到 Session State
-                st.session_state.grading_result = result 
+
+                # 若 AI 回傳無法評分，就不存入結果
+                if "無法評分" in result:
+                    st.warning(result)
+                else:
+                    st.session_state.grading_result = result
 
     # 💡 顯示邏輯分離：只要 Session 有資料就顯示 (不管是不是剛按完按鈕)
     if st.session_state.grading_result:
         result = st.session_state.grading_result
         
-        # --- 儀表板區域 ---
+        # --- 儀表板區域 (卡片 + 雷達圖) ---
         try:
-            # 使用優化版的抓分函數
-            total_score = extract_score("總分", result)
-            s_content = extract_score("內容", result)
-            s_org = extract_score("組織", result)
-            s_gram = extract_score("文法", result)
-            s_vocab = extract_score("字彙", result)
+            # 1. 抓取分數
+            content_match = re.search(r"內容.*?[:：]\s*(\d+)", result)
+            org_match = re.search(r"組織.*?[:：]\s*(\d+)", result)
+            gram_match = re.search(r"文法.*?[:：]\s*(\d+)", result)
+            vocab_match = re.search(r"字彙.*?[:：]\s*(\d+)", result)
             
+            s_content = int(content_match.group(1)) if content_match else 0
+            s_org = int(org_match.group(1)) if org_match else 0
+            s_gram = int(gram_match.group(1)) if gram_match else 0
+            s_vocab = int(vocab_match.group(1)) if vocab_match else 0
+            
+            # 強制用 Python 算總分 (修復 AI 數學 bug)
+            calculated_total = s_content + s_org + s_gram + s_vocab
             scores = [s_content, s_org, s_gram, s_vocab]
 
-            # 檢查是否全是 0 (代表 Regex 失敗)，如果是，嘗試印出除錯訊息
-            # (在正式版可以選擇隱藏，或者保留基本的顯示)
+            st.subheader("📊 評分儀表板")
             
-            st.subheader("📊 評分摘要")
-            col_metrics, col_radar = st.columns([2, 1])
+            # --- 區塊 A: 上層 5 張卡片 ---
+            c_total, c1, c2, c3, c4 = st.columns([1.2, 1, 1, 1, 1])
             
-            with col_metrics:
-                c1, c2, c3, c4 = st.columns(4)
-                c1.metric("📝 內容", f"{s_content} / 5")
-                c2.metric("🏗️ 組織", f"{s_org} / 5")
-                c3.metric("⚖️ 文法", f"{s_gram} / 5")
-                c4.metric("🔤 字彙", f"{s_vocab} / 5")
-                st.metric("🏆 總分", f"{total_score} / 20")
+            with c_total:
+                st.markdown(f"""
+                <div class="score-box score-total">
+                    <div class="score-title">🏆 總分</div>
+                    <div class="score-val" style="font-size: 42px;">{calculated_total}</div>
+                    <div style="font-size: 12px; opacity: 0.6;">滿分 20</div>
+                </div>
+                """, unsafe_allow_html=True)
+
+            # 迴圈建立 4 個分項卡片
+            labels = ["📝 內容", "🏗️ 組織", "⚖️ 文法", "🔤 字彙"]
+            sub_scores = [s_content, s_org, s_gram, s_vocab]
+            cols = [c1, c2, c3, c4]
             
+            for col, label, val in zip(cols, labels, sub_scores):
+                with col:
+                    st.markdown(f"""
+                    <div class="score-box score-sub">
+                        <div class="score-title">{label}</div>
+                        <div class="score-val">{val}</div>
+                        <div style="font-size: 12px; opacity: 0.6;">/ 5</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+            # --- 區塊 B: 下層 雷達圖 (置中顯示) ---
+            st.write("") # 空行間隔
+            st.write("") 
+            
+            # 使用 3 欄位佈局來讓雷達圖居中 ([1, 2, 1] 比例)
+            _, col_radar, _ = st.columns([1, 2, 1])
             with col_radar:
                 fig = plot_radar_chart(scores)
                 st.plotly_chart(fig, use_container_width=True)
@@ -364,11 +439,14 @@ with tab2:
             st.divider()
             
         except Exception as e:
-            st.error(f"解析分數時發生錯誤，但仍可查看下方文字回饋。({str(e)})")
+            # 除錯用，若不想顯示錯誤訊息可註解掉
+            # st.error(f"解析分數時發生錯誤: {e}") 
+            pass
         
+        # 顯示文字報告
         st.markdown(result)
         
-        # 下載按鈕 (現在按它不會讓畫面消失了！)
+        # 下載按鈕
         st.download_button(
             label="📥 下載完整評語 (.md)",
             data=result,
@@ -377,7 +455,7 @@ with tab2:
         )
         
         st.divider()
-        st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢本作者。")
+        st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢製作者。")
 
 st.markdown("---")
 st.markdown("<div class='footer'>製作者：中央大學資管系二年級 蔡仁懋 m20060719@gmail.com </div>", unsafe_allow_html=True)
