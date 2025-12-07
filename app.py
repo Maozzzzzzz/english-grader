@@ -113,7 +113,7 @@ def call_gemini_api(prompt, key, model_name):
     if "API_KEY_3" in st.secrets: keys_pool.append(st.secrets["API_KEY_3"])
     if "API_KEY_4" in st.secrets: keys_pool.append(st.secrets["API_KEY_4"])
     if "API_KEY_5" in st.secrets: keys_pool.append(st.secrets["API_KEY_5"])
-     if "GOOGLE_API_KEY" in st.secrets: keys_pool.append(st.secrets["GOOGLE_API_KEY"])
+    if "GOOGLE_API_KEY" in st.secrets: keys_pool.append(st.secrets["GOOGLE_API_KEY"])
     
     # 如果沒有設定 secrets，就用傳進來的單一 key (可能是使用者手填的)
     if not keys_pool and key:
