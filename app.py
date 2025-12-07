@@ -33,18 +33,36 @@ def get_random_api_key():
 PROJECT_API_KEY = get_random_api_key()
 
 # ==========================================
-# CSS 優化 (字體統一與排版)
+# CSS 優化 (修復深色模式字體看不見的問題)
 # ==========================================
 st.markdown("""
 <style>
+    /* 修正輸入框字體大小 */
     .stTextArea textarea { font-size: 16px !important; line-height: 1.5 !important; }
-    .metric-card { background-color: #f0f2f6; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.1); }
-    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; color: #888; font-size: 12px; padding: 10px; background-color: #ffffff; pointer-events: none; border-top: 1px solid #eee; z-index: 100; }
+    
+    /* 修正指標卡片 */
+    .metric-card { background-color: #262730; border-radius: 10px; padding: 15px; text-align: center; box-shadow: 2px 2px 5px rgba(0,0,0,0.3); }
+    
+    /* 頁尾固定 */
+    .footer { position: fixed; left: 0; bottom: 0; width: 100%; text-align: center; color: #888; font-size: 12px; padding: 10px; background-color: #0e1117; pointer-events: none; border-top: 1px solid #333; z-index: 100; }
     .block-container { padding-bottom: 80px; }
     
-    /* 強制統一 Markdown 生成內容的標題樣式 */
-    h3 { font-size: 22px !important; font-weight: bold !important; color: #333 !important; }
-    p { font-size: 16px !important; }
+    /* 🔥 關鍵修正：將所有標題強制設為白色，確保深色模式可讀 🔥 */
+    h1, h2, h3, h4, h5, h6 {
+        color: #ffffff !important;
+        font-weight: 600 !important;
+    }
+    
+    /* 修正 Markdown 內文顏色，避免被蓋掉 */
+    p, li, span {
+        color: #e0e0e0 !important;
+        font-size: 16px !important;
+    }
+    
+    /* 特別針對 Streamlit 的 Tab 標籤顏色 */
+    .stTabs [data-baseweb="tab"] {
+        color: #ffffff;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -108,7 +126,7 @@ def call_gemini_api(prompt, key, model_name):
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.5} # 🔥 降低溫度，讓評分更嚴格、格式更穩定
+        "generationConfig": {"temperature": 0.4} # 🔥 溫度降到 0.4，讓評分更冷靜客觀
     }
 
     max_retries = max(3, len(keys_pool))
@@ -150,14 +168,13 @@ with tab1:
                 st.error("❌ 請先設定 API Key")
             else:
                 with st.spinner("AI 閱卷委員正在出題..."):
-                    # 🔥 題目 Prompt：極簡輸出格式 🔥
                     prompt_gen = """
                     角色：大考中心出題委員。
                     任務：隨機設計一個學測英文作文題目 (食衣住行/文化/校園/時事/成長)。
                     
                     ⚠️ **Strict Output Rules (嚴格輸出規範)**:
-                    1. **禁止** 任何開場白 (如 "好的，這是題目...")。
-                    2. **禁止** 出現英文指令 (如 "In the first paragraph...")。
+                    1. **禁止** 任何開場白。
+                    2. **禁止** 出現英文指令。
                     3. 標題與內文格式必須統一。
                     
                     請直接輸出以下內容 (全繁體中文)：
@@ -178,7 +195,7 @@ with tab1:
                     st.session_state.generated_topic = result
         
         if st.session_state.generated_topic:
-            st.markdown(st.session_state.generated_topic) # 直接顯示，不用 info 框，格式比較好控制
+            st.markdown(st.session_state.generated_topic)
             current_topic = st.session_state.generated_topic
     else:
         current_topic = st.text_area("請輸入題目說明", height=150, placeholder="例如：提示：排隊雖是生活中常有的經驗...")
@@ -205,33 +222,35 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：地獄級嚴格 + 內容擴充版 🔥
+            # 🔥 批改 Prompt：殘酷評分 + 字體白化 + 句型擴充版 🔥
             system_prompt = f"""
-            # Role: 台灣學測英文作文「魔鬼級」閱卷委員 (Ruthless Grader)
+            # Role: 台灣學測英文作文「殘酷」閱卷委員 (Ruthless Grader)
             
             # Context:
             【題目】{current_topic}
             【學生作文】{user_essay}
             
-            # ⚠️ CRITICAL GRADING PROTOCOL (嚴格評分守則):
-            **請停止討好學生。你的任務是找出錯誤並給予現實的低分。**
+            # ⚠️ 評分邏輯修正：起點錨定法 (Anchor Pricing)
+            **請預設這篇文章只有 10 分 (均標)。**
+            除非你能找到「極具說服力」的證據證明它值得更高分，否則不要加分。
             
-            1. **分數天花板 (Score Caps)**:
-               - ❌ 發現 **中式英文 (Chinglish)** 或語意不清 -> **總分最高 11 分**。
-               - ❌ 用詞平淡 (只會用 good, bad, happy) -> **總分最高 13 分**。
-               - ❌ 文法錯誤超過 3 處 -> **總分最高 14 分**。
-               - ✅ 只有內容極具深度且用字精準 (Level 5-6) 才允許給 15 分以上。
-
-            2. **常模參照**:
-               - **15-20分**: 全台前 7%。(非常稀有)
-               - **12-14分**: 前標水準。(結構完整但有小錯)
-               - **8-11分**: 均標水準。(大多數人的落點)
+            1. **【15-20 分 (神級)】**: 
+               - **條件**: 幾乎無懈可擊。用字如 native speaker 般精準，句型變化多端。
+               - **現實**: 只有不到 7% 的人能拿到。**若有任何明顯文法錯，絕不給此區間。**
+            
+            2. **【12-14 分 (前標)】**:
+               - **條件**: 結構完整，論點清楚。
+               - **現實**: 這是「好學生」的天花板。普通的通順文章頂多 12 分。
+            
+            3. **【8-11 分 (均標)】**:
+               - **條件**: 能溝通，但用字平淡 (good, bad, happy)，或有中式英文。
+               - **現實**: **這是大多數高中生的落點。請勇敢給出 10 分或 11 分。**
 
             # Task: 產出結構化的 Markdown 批改報告
             
             ## Part 1: 總分與犀利點評
             總分 (0-20)：[分數]
-            一句話點評：(請用嚴格的角度，直接點出這篇文章為什麼拿不到高分)
+            一句話點評：(請用嚴格的角度，直接點出這篇文章為什麼拿不到更高分，例如：「雖然通順，但用字過於國中程度，無法進入前標。」)
             
             ## Part 2: 四大構面評分 (0-5分)
             - 內容: [分數] 
@@ -248,26 +267,30 @@ with tab2:
             > - 🟢 **訂正**: :green[...]
             > - 💡 **解析**: ...
             
-            (以此類推)
-            
             ## Part 4: Level 5-6 高級字彙升級 (Vocabulary Upgrade)
             **請提供 3-5 個高級單字建議，必須包含「詞性」、「中文」、「等級」與「詳細用法」。**
             
             > ### 🌟 升級建議 1
-            > - 🔹 **原文**: :blue[...原本的簡單字...]
+            > - 🔹 **原文**: :blue[...]
             > - 🚀 **升級**: **[高級單字]** ([詞性], [中文意思]) (Level [5或6])
-            > - 📝 **解析**: [請詳細說明為什麼用這個字比較好，例如語氣強弱、搭配詞用法等]
-            
-            > ### 🌟 升級建議 2
-            > - 🔹 **原文**: ...
-            > - 🚀 **升級**: ...
             > - 📝 **解析**: ...
             
-            > ### ✍️ 加分句型
-            > - (提供一個高級句型並示範如何套用在本文)
+            ## Part 5: 實用加分句型 (Bonus Sentence Patterns)
+            **請提供 3 組不同類型的高級句型，幫助學生提升文章層次。**
+            
+            > ### ✍️ 句型 1：[句型名稱，如：倒裝句]
+            > - **句型結構**: [結構說明]
+            > - **範例**: [造句]
+            > - **如何套用**: [說明如何用在本文]
+            
+            > ### ✍️ 句型 2：[句型名稱，如：分詞構句]
+            > - ...
+            
+            > ### ✍️ 句型 3：[句型名稱，如：假設語氣]
+            > - ...
             """
             
-            with st.spinner("AI 閱卷委員正在嚴格審視中 ..."):
+            with st.spinner("AI 閱卷委員正在嚴格審視中 (預設分數：10分)..."):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
                 
@@ -277,7 +300,7 @@ with tab2:
                     st.success("🎉 閱卷完成！")
                     st.markdown(result)
                     st.divider()
-                    st.caption("📢 本批改結果採「嚴格標準」，旨在反映真實大考競爭力。")
+                    st.caption("📢 本批改結果採「嚴格標準」，分數較低為正常現象，旨在反映真實大考競爭力。")
 
 st.markdown("---")
 st.markdown("<div class='footer'>製作者：中央大學資管系二年級 蔡仁懋</div>", unsafe_allow_html=True)
