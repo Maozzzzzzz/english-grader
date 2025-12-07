@@ -70,6 +70,16 @@ st.markdown("""
     .stTabs [data-baseweb="tab"] {
         color: #ffffff;
     }
+    
+    /* 優化 Metric 數值顏色 */
+    [data-testid="stMetricValue"] {
+        font-size: 26px !important;
+        color: #ff4b4b !important; /* 讓分數顯示為紅色醒目 */
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 16px !important;
+        color: #ffffff !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -203,6 +213,8 @@ with tab1:
         
         if st.session_state.generated_topic:
             st.markdown(st.session_state.generated_topic)
+            # 💡 新增：字數提示區塊
+            st.info("💡 **小提醒：學測英文作文建議作答字數為 120 字以上 ，盡力發揮文筆吧!!**")
             current_topic = st.session_state.generated_topic
     else:
         current_topic = st.text_area("請輸入題目說明", height=150, placeholder="例如：提示：排隊雖是生活中常有的經驗...")
@@ -303,6 +315,36 @@ with tab2:
                     st.error(result)
                 else:
                     st.success("🎉 閱卷完成！")
+                    
+                    # 💡 新增：自動抓取分數並顯示儀表板
+                    try:
+                        # 使用 Regex 抓取分數
+                        total_match = re.search(r"總分.*?[:：]\s*(\d+)", result)
+                        content_match = re.search(r"內容.*?[:：]\s*(\d+)", result)
+                        org_match = re.search(r"組織.*?[:：]\s*(\d+)", result)
+                        gram_match = re.search(r"文法.*?[:：]\s*(\d+)", result)
+                        vocab_match = re.search(r"字彙.*?[:：]\s*(\d+)", result)
+                        
+                        # 若抓不到則顯示 N/A 或 0
+                        total_score = total_match.group(1) if total_match else "N/A"
+                        s_content = content_match.group(1) if content_match else "0"
+                        s_org = org_match.group(1) if org_match else "0"
+                        s_gram = gram_match.group(1) if gram_match else "0"
+                        s_vocab = vocab_match.group(1) if vocab_match else "0"
+                        
+                        # 顯示美觀的儀表板
+                        st.subheader("📊 評分摘要")
+                        c1, c2, c3, c4, c5 = st.columns(5)
+                        c1.metric("🏆 總分", f"{total_score} / 20")
+                        c2.metric("📝 內容", f"{s_content} / 5")
+                        c3.metric("🏗️ 組織", f"{s_org} / 5")
+                        c4.metric("⚖️ 文法", f"{s_gram} / 5")
+                        c5.metric("🔤 字彙", f"{s_vocab} / 5")
+                        st.divider()
+                        
+                    except Exception as e:
+                        pass # 如果 regex 失敗，不影響後面文字輸出
+                    
                     st.markdown(result)
                     st.divider()
                     st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢製作者。")
