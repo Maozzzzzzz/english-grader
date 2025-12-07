@@ -7,14 +7,14 @@ import google.generativeai as genai
 
 # 頁面設定
 st.set_page_config(
-    page_title="英級棒!! 學測英文作文AI批改APP", 
+    page_title="英級棒!! 學測英文作文AI智慧批卷系統", 
     page_icon="💯", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # ==========================================
-# 👇👇👇 三刀流：多重金鑰負載平衡系統 👇👇👇
+# 多重金鑰負載平衡系統
 # ==========================================
 def get_random_api_key():
     """
@@ -22,6 +22,7 @@ def get_random_api_key():
     並隨機選出一組使用。
     """
     available_keys = []
+    # 嘗試抓取 3 把鑰匙
     if "API_KEY_1" in st.secrets: available_keys.append(st.secrets["API_KEY_1"])
     if "API_KEY_2" in st.secrets: available_keys.append(st.secrets["API_KEY_2"])
     if "API_KEY_3" in st.secrets: available_keys.append(st.secrets["API_KEY_3"])
@@ -53,83 +54,48 @@ with st.sidebar:
     
     # 1. API Key 狀態
     if PROJECT_API_KEY:
-        api_key = PROJECT_API_KEY
         st.success("✅ 系統已就緒 (多重金鑰保護中)")
     else:
         st.warning("⚠️ 未偵測到雲端 Key，請手動輸入")
         api_key_input = st.text_input("請輸入 Google API Key", type="password")
-        api_key = api_key_input.strip() if api_key_input else ""
+        PROJECT_API_KEY = api_key_input.strip() if api_key_input else ""
     
     st.markdown("---")
     
-    # 2. 模型選擇與自動偵測 (新增功能!!)
+    # 2. 模型資訊 (🔥 依照指示強制鎖定 2.5-flash 🔥)
     st.subheader("🤖 AI 模型設定")
+    target_model = "gemini-2.5-flash" 
+    st.info(f"⚡ 目前固定使用：\n**{target_model}**")
+    st.caption("已鎖定指定模型版本。")
     
-    # 定義預設的安全清單 (保底用)
-    default_models = [
-        'gemini-1.5-flash', 
-        'gemini-1.5-pro',
-        'gemini-1.5-flash-001',
-        'gemini-1.5-flash-latest',
-        'gemini-1.0-pro'
-    ]
-
-    # 初始化 session state 中的模型清單
-    if 'model_list' not in st.session_state:
-        st.session_state.model_list = default_models
-
-    # === 自動偵測按鈕 ===
-    if st.button("🔍 掃描此 Key 可用的模型"):
-        if not api_key:
-            st.error("請先設定 API Key")
-        else:
-            try:
-                with st.spinner("正在向 Google 查詢可用模型..."):
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-                    resp = requests.get(url)
-                    
-                    if resp.status_code == 200:
-                        data = resp.json()
-                        # 過濾出可以生成內容 (generateContent) 的模型
-                        valid_models = []
-                        if 'models' in data:
-                            for m in data['models']:
-                                if 'generateContent' in m.get('supportedGenerationMethods', []):
-                                    # 去掉 'models/' 前綴，只留名稱
-                                    model_name = m['name'].replace('models/', '')
-                                    valid_models.append(model_name)
-                        
-                        if valid_models:
-                            st.session_state.model_list = valid_models
-                            st.success(f"成功偵測到 {len(valid_models)} 個可用模型！")
-                        else:
-                            st.warning("未找到支援文字生成的模型，使用預設清單。")
-                    else:
-                        st.error(f"查詢失敗 (Status {resp.status_code})")
-            except Exception as e:
-                st.error(f"發生錯誤: {e}")
-
-    # 顯示下拉選單 (使用 session state 的清單)
-    model_option = st.selectbox(
-        "選擇模型 (建議使用 1.5-flash)", 
-        st.session_state.model_list, 
-        index=0
-    )
-    
-    st.caption(f"目前使用: {model_option}")
     st.markdown("---")
     
-    with st.expander("📚 大考中心評分標準"):
+    # 3. 評分標準 (已更新為詳細文字說明)
+    with st.expander("📚 大考中心評分標準 (細項)", expanded=True):
         st.markdown("""
-        **依據 113 年學測統計數據校正：**
-        **🏆 頂標 (15-20分)** - 前 7.8% 考生。
-        **👍 前標 (12-14分)** - 前 20% 考生。
-        **😐 均標 (9-11分)** - 約 50% 考生落點。
-        **📉 後標 (0-8分)** - 內容貧乏或嚴重離題。
+        **內容 (Content)**
+        - **5-4分 (優)**: 主題清楚切題，有具體、完整的相關細節支持。
+        - **3分 (可)**: 主題不夠清楚或突顯，部分發展不全。
+        - **2-1分 (差)**: 主題不明，大部分相關敘述發展不全或離題。
+        
+        **組織 (Organization)**
+        - **5-4分 (優)**: 重點分明，有連貫性，轉承語使用得當。
+        - **3分 (可)**: 重點安排不妥，前後發展比例與轉承語使用欠妥。
+        - **2-1分 (差)**: 重點不明，前後不連貫。
+        
+        **文法句構 (Grammar)**
+        - **5-4分 (優)**: 文法無錯誤，文句結構富變化。
+        - **3分 (可)**: 文法、標點錯誤少，且不影響文意表達。
+        - **2-1分 (差)**: 錯誤多，且明顯影響文意表達。
+        
+        **字彙拼字 (Vocabulary)**
+        - **5-4分 (優)**: 用字精確、得宜，無拼字錯誤。
+        - **3分 (可)**: 字詞單調、重複，偶有不當但無礙文意。
+        - **2-1分 (差)**: 用字、拼字錯誤多，明顯影響文意。
         """)
 
-st.title("💯 英級棒!! 學測英文作文 AI 批改 APP")
-st.caption("專為台灣高中生打造，依照大考中心數據嚴格校正的模擬閱卷系統。")
+st.title("💯英級棒!! 學測英文作文AI智慧批卷系統")
+st.caption("專為學測英文科所打造，依大考中心數據校正的模擬閱卷系統。")
 
 if 'generated_topic' not in st.session_state:
     st.session_state.generated_topic = ""
@@ -138,13 +104,12 @@ if 'essay_content' not in st.session_state:
 
 # --- 核心功能：萬能連線函數 ---
 def call_gemini_api(prompt, key, model_name):
-    # 確保 model_name 不包含 models/ 前綴，避免重複
     clean_model_name = model_name.replace("models/", "")
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model_name}:generateContent?key={key}"
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7}
+        "generationConfig": {"temperature": 0.9} # 提高創意度
     }
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -172,23 +137,32 @@ with tab1:
     current_topic = ""
     
     if topic_source == "AI 自動出題":
-        if st.button("✨ 生成模擬試題", type="primary"):
-            if not api_key:
+        if st.button("✨ 生成模擬試題 (隨機)", type="primary"):
+            if not PROJECT_API_KEY:
                 st.error("❌ 請先設定 API Key")
             else:
-                with st.spinner("AI 正在設計貼近高中生活的題目..."):
+                with st.spinner(f"AI ({target_model}) 正在隨機設計多元題目..."):
+                    # 🔥 題目 Prompt：加入多元主題 (食衣住行、台灣特色等) 🔥
                     prompt_gen = """
-                    角色：你是一位資深的高中英文學測出題老師。
-                    任務：請從以下領域中選一個貼近台灣高中生生活的主題：
-                    「食衣住行育樂、人際關係、校園生活、親情、友情、自我成長、科技與生活」。
-                    輸出要求：
-                    1. 絕對不要提到「隨機選出」或「主題是...」這類字眼。
-                    2. 全中文描述，模擬學測考卷的題目呈現方式。
-                    3. 格式包含：題目引文、第一段引導、第二段引導。
+                    角色：你是一位創意豐富的高中英文學測出題老師。
+                    任務：請「隨機」從以下類別中挑選一個，設計一個符合台灣高中生生活經驗的英文作文題目：
+                    1. **食衣住行育樂** (例如：夜市小吃、捷運文化、網購經驗、國內旅遊)
+                    2. **台灣特色** (例如：便利商店的便利性、傳統節慶如中秋烤肉、手搖飲文化)
+                    3. **校園生活與人際** (例如：社團活動、考試壓力、與同學的衝突、好朋友的特質)
+                    4. **時事與社會觀察** (例如：博愛座爭議、外送平台興起、氣候變遷的感受)
+                    5. **親情與家庭** (例如：與長輩的代溝、一次難忘的家庭聚餐、做家事的體悟)
+                    6. **自我成長** (例如：如何面對失敗、學會獨處、未來的夢想)
+
+                    請確保題目多樣化，且引導明確讓學生知道寫作重點
+                    
+                    輸出格式要求：
+                    1. 不需顯示你選了哪個類別。
+                    2. 題目引文 (約 50-80 字，全中文，模擬考卷語氣)。
+                    3. 第一段引導 (說明應包含的內容)。
+                    4. 第二段引導 (說明應包含的內容)。
                     """
-                    # 每次呼叫都重新抽一把鑰匙
-                    current_key = get_random_api_key() or api_key
-                    result = call_gemini_api(prompt_gen, current_key, model_option)
+                    current_key = get_random_api_key() or PROJECT_API_KEY
+                    result = call_gemini_api(prompt_gen, current_key, target_model)
                     st.session_state.generated_topic = result
         
         if st.session_state.generated_topic:
@@ -208,42 +182,68 @@ with tab2:
     else:
         st.warning("⚠️ 尚未設定題目")
 
-    col_demo, col_empty = st.columns([1, 4])
-    with col_demo:
-        if st.button("📝 載入示範作文 (Demo)"):
-            st.session_state.essay_content = """I think that robots will become helpful assistants in our future daily lives. For example, they can help us do household chores, such as sweeping the floor, washing the dishes, and taking out the garbage. With their assistance, we can save a lot of time and energy to do other meaningful things.
-However, despite the convenience robots may bring, I am worried that they might make us lazy. If we rely on them too much, we might lose the ability to take care of ourselves. Therefore, while enjoying the benefits of technology, we should also remind ourselves not to be overly dependent on it."""
+    # (Demo 按鈕已移除)
 
-    user_essay = st.text_area("請在此輸入英文作文：", value=st.session_state.essay_content, height=250, key="essay_input")
+    user_essay = st.text_area("請在此輸入英文作文：", value=st.session_state.essay_content, height=300, key="essay_input")
     
     word_count = len(re.findall(r'\w+', user_essay))
     if word_count > 0:
         st.caption(f"📊 目前字數：{word_count} 字")
 
     if st.button("🚀 開始批改", type="primary", use_container_width=True):
-        if not api_key:
+        if not PROJECT_API_KEY:
             st.error("❌ 請先設定 API Key！")
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
+            # 🔥 批改 Prompt：參考側邊欄標準 🔥
             system_prompt = f"""
-            # Role: 台灣學測英文作文「嚴格」閱卷委員
-            # Objective: 根據 113 年學測得分統計數據進行「客觀且嚴格」的評分。
+            # Role: 台灣學測英文作文閱卷委員 (Strict Grader)
             # Context:
             【題目】{current_topic}
             【學生作文】{user_essay}
             
-            # Task: 執行「三階段回饋」
-            1. 嚴格評分 (內容/組織/文法/字彙 各 0-5 分) 並給予簡評。
-            2. 文章訂正 (使用條列式，標出 🔴原句 🟢訂正 💡解析)。
-            3. 學習資源 (提供 :blue[升級詞組] 與 :orange[加分句型])。
-            請輸出完整 Markdown 報告。
+            # 評分標準 (依照大考中心規範):
+            1. **內容 (0-5)**: 主題是否切題？細節是否支持論點？
+            2. **組織 (0-5)**: 結構是否連貫？轉承語使用是否恰當？
+            3. **文法 (0-5)**: 句構變化與正確性。
+            4. **字彙 (0-5)**: 用字精確度與拼字。
+
+            # Objective: 根據 113 年大考中心真實統計數據進行評分，絕對避免分數通膨。
+            你必須嚴格遵守以下分數分佈常模，不可給予虛高的鼓勵分：
+            
+            1. **【神級範文】19 ~ 20 分 (Top 0.16%)**
+               - 統計事實：全台灣僅不到 0.2% 考生達到此區間。
+               - 評分標準：思想極具深度、語言如母語人士般精準、修辭優美，完全無語法錯誤。
+               - *除非文章完美無瑕，否則不給此高分。*
+
+            2. **【頂標高手】15 ~ 18 分 (Top 7.8%)**
+               - 統計事實：15分以上僅佔全體前 7.8%。
+               - 評分標準：內容豐富、組織嚴謹、句型變化多樣。允許極少量的微小錯誤，但不影響閱讀流暢度。
+            
+            3. **【前標佳作】12 ~ 14 分 (Top 27%)**
+               - 統計事實：約落在前 8% ~ 27% 區間。
+               - 評分標準：結構完整，能清楚表達論點。有些許文法或用字錯誤，但大體通順。
+            
+            4. **【均標中等】8 ~ 11 分 (Top 28% ~ 56%)**
+               - 統計事實：這是最龐大的中段班。
+               - 評分標準：能大致表達意思，但內容較為單薄，或文法、拼字錯誤較多，影響閱讀體驗。
+            
+            5. **【待加強】0 ~ 7 分 (Bottom 43%)**
+               - 統計事實：約 43% 的考生在此區間 (包含 10% 的 0 分)。
+               - 評分標準：離題、字數嚴重不足、語意不清、中式英文嚴重，或無法完整成句。
+
+            # Task:
+            請產出一份 Markdown 格式的批改報告，包含：
+            1. **總分與簡評**: 給予一個總分 (0-20)，並用一句話總結。
+            2. **分項評分**: 針對上述四項給分並簡述原因。
+            3. **逐句訂正**: 請列出 3-5 個主要錯誤，格式為「🔴原句 -> 🟢訂正 -> 💡解析」，要多善用標記或不同字，讓使用者可以更容易抓到訂正重點。
+            4. **升級建議**: 提供 3 個可以替換的高級單字或片語。
             """
             
-            with st.spinner(f"AI 閱卷官正在嚴格評分中..."):
-                # 負載平衡
-                current_key = get_random_api_key() or api_key
-                result = call_gemini_api(system_prompt, current_key, model_option)
+            with st.spinner(f"AI ({target_model}) 正在嚴格閱卷中..."):
+                current_key = get_random_api_key() or PROJECT_API_KEY
+                result = call_gemini_api(system_prompt, current_key, target_model)
                 if "⚠️" in result:
                     st.error(result)
                 else:
