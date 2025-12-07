@@ -4,7 +4,7 @@ import json
 import re
 import random
 import time
-import plotly.graph_objects as go # 引入圖表庫
+import plotly.graph_objects as go
 
 # 頁面設定
 st.set_page_config(
@@ -34,13 +34,12 @@ def get_random_api_key():
 PROJECT_API_KEY = get_random_api_key()
 
 # ==========================================
-# CSS 優化
+# CSS 優化 (自適應淺色/深色模式)
 # ==========================================
 st.markdown("""
 <style>
     .stTextArea textarea { font-size: 16px !important; line-height: 1.5 !important; }
     
-    /* 指標卡片自適應 */
     .metric-card { 
         background-color: var(--secondary-background-color); 
         border-radius: 10px; 
@@ -49,7 +48,6 @@ st.markdown("""
         box-shadow: 2px 2px 5px rgba(0,0,0,0.1); 
     }
     
-    /* 頁尾固定 */
     .footer { 
         position: fixed; left: 0; bottom: 0; width: 100%; 
         text-align: center; color: var(--text-color); font-size: 12px; 
@@ -58,18 +56,15 @@ st.markdown("""
     }
     .block-container { padding-bottom: 80px; }
     
-    /* 自適應文字顏色 */
     h1, h2, h3, h4, h5, h6 { color: var(--text-color) !important; font-weight: 600 !important; }
     p, li, span, div { color: var(--text-color) !important; font-size: 16px !important; }
     
-    /* Widget Label */
     .stRadio label, .stTextInput label, .stTextArea label, .stSelectbox label {
         color: var(--text-color) !important; font-size: 18px !important; font-weight: bold !important;
     }
-
+    
     .stTabs [data-baseweb="tab"] { color: var(--text-color); }
     
-    /* Metric 數值顏色 */
     [data-testid="stMetricValue"] { font-size: 26px !important; color: #ff4b4b !important; }
     [data-testid="stMetricLabel"] { font-size: 16px !important; color: var(--text-color) !important; }
 </style>
@@ -109,7 +104,8 @@ if 'generated_topic' not in st.session_state:
     st.session_state.generated_topic = ""
 if 'essay_content' not in st.session_state:
     st.session_state.essay_content = ""
-if 'grading_result' not in st.session_state: # 儲存批改結果供下載用
+# 💡 關鍵變數：用來儲存批改結果，避免重整後消失
+if 'grading_result' not in st.session_state:
     st.session_state.grading_result = ""
 
 # --- 核心連線函數 ---
@@ -153,14 +149,12 @@ def call_gemini_api(prompt, key, model_name):
             return f"⚠️ 系統錯誤: {str(e)}"
     return "❌ 系統忙碌中，請稍後再試。"
 
-# --- 雷達圖繪製函數 ---
+# --- 雷達圖繪製函數 (優化邊距版) ---
 def plot_radar_chart(scores):
     categories = ['內容', '組織', '文法', '字彙']
-    # 補齊數據確保 list 長度
     values = [int(s) for s in scores]
     while len(values) < 4: values.append(0)
     
-    # 封閉圖形
     values += values[:1]
     categories += categories[:1]
 
@@ -180,16 +174,31 @@ def plot_radar_chart(scores):
                 tickfont=dict(color='gray')
             ),
             angularaxis=dict(
-                tickfont=dict(size=14, color='gray') # 調整標籤顏色以適應深淺模式
+                tickfont=dict(size=16) # 加大字體
             )
         ),
         showlegend=False,
-        margin=dict(l=40, r=40, t=20, b=20),
-        height=250,
-        paper_bgcolor='rgba(0,0,0,0)', # 透明背景
+        # 💡 關鍵修正：加大 Margin 防止文字被切掉
+        margin=dict(l=80, r=80, t=30, b=30),
+        height=300,
+        paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)'
     )
     return fig
+
+# --- 萬能抓分函數 (Regex 優化版) ---
+def extract_score(pattern_name, text):
+    # 支援多種格式： "內容:4", "內容： 4", "內容 (4/5)"
+    # 搜尋 "關鍵字" 後面跟著 "冒號或空白"，再抓 "數字"
+    patterns = [
+        rf"{pattern_name}.*?[:：]\s*(\d+)",
+        rf"{pattern_name}.*?(\d+)\s*/\s*5"
+    ]
+    for p in patterns:
+        match = re.search(p, text)
+        if match:
+            return match.group(1)
+    return "0" # 抓不到就回傳 0
 
 # 分頁設計
 tab1, tab2 = st.tabs(["🎲 題目設定", "✍️ 作文批改區"])
@@ -209,14 +218,9 @@ with tab1:
                 with st.spinner("AI 閱卷委員正在出題..."):
                     prompt_gen = """
                     角色：大考中心出題委員。
-                    任務：隨機設計一個學測英文作文題目 (食/衣/住/行/文化/校園/時事/成長)。
-                    
-                    ⚠️ **Strict Output Rules**:
-                    1. 禁止開場白。
-                    2. 禁止英文指令。
-                    3. 格式統一。
-                    
-                    請直接輸出以下內容 (全繁體中文)：
+                    任務：隨機設計一個學測英文作文題目。
+                    ⚠️ **Strict Output Rules**: 禁止開場白、禁止英文指令、標題和內文格式要統一和引文、第一段、第二段引導要換行分開。
+                    請直接輸出：
                     ### 題目：[題目名稱]
                     **引文說明**：[50-80字引導]
                     **第一段引導**：[說明重點]
@@ -228,7 +232,7 @@ with tab1:
         
         if st.session_state.generated_topic:
             st.markdown(st.session_state.generated_topic)
-            st.info("💡 **小提醒：學測英文作文建議作答字數為 120 字以上 (約 150-180 字為佳)！**")
+            st.info("💡 **小提醒：學測英文作文建議作答字數為 120 字以上！**")
             current_topic = st.session_state.generated_topic
         else:
             current_topic = ""
@@ -251,16 +255,15 @@ with tab2:
     if word_count > 0:
         st.caption(f"📊 目前字數：{word_count} 字")
 
+    # 🚀 按鈕只負責「觸發 API」並「存入 Session」
     if st.button("🚀 開始批改", type="primary", use_container_width=True):
         if not PROJECT_API_KEY:
             st.error("❌ 請先設定 API Key！")
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：新增 Diff 標示指令 🔥
             system_prompt = f"""
             # Role: 台灣學測英文作文「地獄級」閱卷委員
-            
             # Context:
             【題目】{current_topic}
             【學生作文】{user_essay}
@@ -270,7 +273,6 @@ with tab2:
             - ❌ **上限 11 分**: 國中程度用字。
             - ❌ **上限 14 分**: 有明顯文法錯誤。
             - ✅ **15 分以上**: 深度 + 精準用字 + 無錯。
-            - 常模：15-20分(前7%), 12-14分(前27%), 9-11分(中段)。
 
             # Task: 產出 Markdown 報告
             
@@ -286,12 +288,12 @@ with tab2:
             
             ## Part 3: 逐句訂正 (Visual Diff)
             **請找出 3-5 個錯誤。**
-            **⚠️ 關鍵要求：請使用「刪除線」與「粗體」標示差異，讓學生一眼看出改了哪裡。**
+            **⚠️ 關鍵要求：請使用「刪除線」、「粗體」、「顏色不同」、「螢光標示」等方法標示差異。**
             格式範例：
             > ### 🚩 改進點 1
             > - 🔴 **原句**: He :red[~~go~~] to school yesterday.
             > - 🟢 **訂正**: He :green[**went**] to school yesterday.
-            > - 💡 **解析**: 時態錯誤，yesterday 為過去式。
+            > - 💡 **解析**: 時態錯誤。
             
             ## Part 4: Level 5-6 高級字彙升級
             **提供 3-5 個高級單字 (含詞性/中文/等級)。**
@@ -301,74 +303,68 @@ with tab2:
             > - 📝 **解析**: ...
             
             ## Part 5: 實用加分句型
-            **提供 3 組「截然不同類型」的高級句型 (如倒裝、分詞、虛擬)。**
+            **提供 3 組「截然不同類型」的高級句型。**
             """
             
-            # 💡 優化：在等待時顯示實用小撇步 (隨機)
             tips = ["💡 Tip: 善用轉折詞 (However, Therefore) 能大幅提升組織分數！", 
-                    "💡 Tip: 避免一直使用 'very'，改用 'extremely' 或 'significantly'。", 
-                    "💡 Tip: 嘗試使用倒裝句來增強語氣，閱卷老師會眼睛一亮！"]
+                    "💡 Tip: 嘗試使用倒裝句來增強語氣！"]
             
             with st.spinner(f"AI 閱卷委員正在嚴格審視中...\n{random.choice(tips)}"):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
-                st.session_state.grading_result = result # 存起來供下載
-                
-                if "⚠️" in result:
-                    st.error(result)
-                else:
-                    st.success("🎉 閱卷完成！")
-                    
-                    # --- 儀表板區域 ---
-                    try:
-                        total_match = re.search(r"總分.*?[:：]\s*(\d+)", result)
-                        content_match = re.search(r"內容.*?[:：]\s*(\d+)", result)
-                        org_match = re.search(r"組織.*?[:：]\s*(\d+)", result)
-                        gram_match = re.search(r"文法.*?[:：]\s*(\d+)", result)
-                        vocab_match = re.search(r"字彙.*?[:：]\s*(\d+)", result)
-                        
-                        scores = [
-                            content_match.group(1) if content_match else "0",
-                            org_match.group(1) if org_match else "0",
-                            gram_match.group(1) if gram_match else "0",
-                            vocab_match.group(1) if vocab_match else "0"
-                        ]
-                        total_score = total_match.group(1) if total_match else "N/A"
+                # 💡 儲存結果到 Session State
+                st.session_state.grading_result = result 
 
-                        st.subheader("📊 評分摘要")
-                        
-                        # 左邊放數字，右邊放雷達圖
-                        col_metrics, col_radar = st.columns([2, 1])
-                        
-                        with col_metrics:
-                            c1, c2, c3, c4 = st.columns(4)
-                            c1.metric("📝 內容", f"{scores[0]} / 5")
-                            c2.metric("🏗️ 組織", f"{scores[1]} / 5")
-                            c3.metric("⚖️ 文法", f"{scores[2]} / 5")
-                            c4.metric("🔤 字彙", f"{scores[3]} / 5")
-                            st.metric("🏆 總分", f"{total_score} / 20", delta="請繼續加油" if int(total_score)<15 else "表現優異")
-                        
-                        with col_radar:
-                            fig = plot_radar_chart(scores)
-                            st.plotly_chart(fig, use_container_width=True)
-                            
-                        st.divider()
-                        
-                    except Exception as e:
-                        pass
-                    
-                    st.markdown(result)
-                    
-                    # 💡 新增：下載按鈕
-                    st.download_button(
-                        label="📥 下載完整評語 (.md)",
-                        data=result,
-                        file_name=f"Essay_Feedback_{int(time.time())}.md",
-                        mime="text/markdown"
-                    )
-                    
-                    st.divider()
-                    st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢製作者。")
+    # 💡 顯示邏輯分離：只要 Session 有資料就顯示 (不管是不是剛按完按鈕)
+    if st.session_state.grading_result:
+        result = st.session_state.grading_result
+        
+        # --- 儀表板區域 ---
+        try:
+            # 使用優化版的抓分函數
+            total_score = extract_score("總分", result)
+            s_content = extract_score("內容", result)
+            s_org = extract_score("組織", result)
+            s_gram = extract_score("文法", result)
+            s_vocab = extract_score("字彙", result)
+            
+            scores = [s_content, s_org, s_gram, s_vocab]
+
+            # 檢查是否全是 0 (代表 Regex 失敗)，如果是，嘗試印出除錯訊息
+            # (在正式版可以選擇隱藏，或者保留基本的顯示)
+            
+            st.subheader("📊 評分摘要")
+            col_metrics, col_radar = st.columns([2, 1])
+            
+            with col_metrics:
+                c1, c2, c3, c4 = st.columns(4)
+                c1.metric("📝 內容", f"{s_content} / 5")
+                c2.metric("🏗️ 組織", f"{s_org} / 5")
+                c3.metric("⚖️ 文法", f"{s_gram} / 5")
+                c4.metric("🔤 字彙", f"{s_vocab} / 5")
+                st.metric("🏆 總分", f"{total_score} / 20")
+            
+            with col_radar:
+                fig = plot_radar_chart(scores)
+                st.plotly_chart(fig, use_container_width=True)
+                
+            st.divider()
+            
+        except Exception as e:
+            st.error(f"解析分數時發生錯誤，但仍可查看下方文字回饋。({str(e)})")
+        
+        st.markdown(result)
+        
+        # 下載按鈕 (現在按它不會讓畫面消失了！)
+        st.download_button(
+            label="📥 下載完整評語 (.md)",
+            data=result,
+            file_name=f"Essay_Feedback_{int(time.time())}.md",
+            mime="text/markdown"
+        )
+        
+        st.divider()
+        st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢本作者。")
 
 st.markdown("---")
 st.markdown("<div class='footer'>製作者：中央大學資管系二年級 蔡仁懋 m20060719@gmail.com </div>", unsafe_allow_html=True)
