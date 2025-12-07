@@ -62,10 +62,10 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # 2. 模型資訊 (🔥 依照指示強制鎖定 2.5-flash 🔥)
+    # 2. 模型資訊 (已改為隱藏詳細型號，僅顯示狀態)
     st.subheader("🤖 AI 模型設定")
     target_model = "gemini-2.5-flash" 
-    st.info(f"⚡ 目前固定使用：\n**{target_model}**")
+    st.info("⚡ **AI 閱卷委員** (連線中)")
     st.caption("已鎖定指定模型版本。")
     
     st.markdown("---")
@@ -109,7 +109,7 @@ def call_gemini_api(prompt, key, model_name):
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7} # 評分時稍微降低一點隨機性，求穩定
+        "generationConfig": {"temperature": 0.7} 
     }
     try:
         response = requests.post(url, headers=headers, json=data)
@@ -141,7 +141,8 @@ with tab1:
             if not PROJECT_API_KEY:
                 st.error("❌ 請先設定 API Key")
             else:
-                with st.spinner(f"AI ({target_model}) 正在隨機設計多元題目..."):
+                # 🔄 修改點 1: spinner 文字改為「AI 閱卷委員」
+                with st.spinner("AI 閱卷委員正在隨機設計多元題目..."):
                     # 🔥 題目 Prompt：多元主題 🔥
                     prompt_gen = """
                     角色：你是一位創意豐富的高中英文學測出題老師。
@@ -194,7 +195,7 @@ with tab2:
         elif not user_essay:
             st.warning("⚠️ 請輸入作文內容！")
         else:
-            # 🔥 批改 Prompt：動態常模校正 + 視覺優化版 🔥
+            # 🔥 批改 Prompt：動態常模校正 + 視覺優化版 (強制列表換行) 🔥
             system_prompt = f"""
             # Role: 台灣學測英文作文資深閱卷委員 (Senior Grader)
             
@@ -234,19 +235,19 @@ with tab2:
             - 字彙: [分數] (簡評)
             
             ## Part 3: 逐句訂正 (Visual Correction)
-            請找出文中 3-5 個最需要改進的句子（包含文法錯誤或可優化的語氣）。
-            **⚠️ 排版嚴格要求：每一項都必須換行，並使用顏色標記。**
+            請找出文中 3-5 個最需要改進的句子。
+            **⚠️ 排版嚴格要求：請對每一行使用 Markdown 列表符號「-」開頭，確保每一項都強制換行顯示。**
             
-            格式範例：
+            格式範例 (請嚴格遵守)：
             > ### 🚩 改進點 1
-            > 🔴 **原句**: :red[He go to school yesterday.]
-            > 🟢 **訂正**: :green[He **went** to school yesterday.]
-            > 💡 **解析**: 這裡發生了時態錯誤。因為 yesterday 是過去時間，動詞 go 必須改為過去式 went。
+            > - 🔴 **原句**: :red[He go to school yesterday.]
+            > - 🟢 **訂正**: :green[He **went** to school yesterday.]
+            > - 💡 **解析**: 這裡發生了時態錯誤。因為 yesterday 是過去時間，動詞 go 必須改為過去式 went。
             
             > ### 🚩 改進點 2
-            > 🔴 **原句**: :red[...]
-            > 🟢 **訂正**: :green[...]
-            > 💡 **解析**: ...
+            > - 🔴 **原句**: :red[...]
+            > - 🟢 **訂正**: :green[...]
+            > - 💡 **解析**: ...
             
             (以此類推)
             
@@ -255,7 +256,8 @@ with tab2:
             - ✍️ **加分句型**: 提供一個適合本文的高級句型或諺語。
             """
             
-            with st.spinner(f"AI ({target_model}) 正在嚴格閱卷中..."):
+            # 🔄 修改點 2: spinner 文字改為「AI 閱卷委員」
+            with st.spinner("AI 閱卷委員正在嚴格閱卷中..."):
                 current_key = get_random_api_key() or PROJECT_API_KEY
                 result = call_gemini_api(system_prompt, current_key, target_model)
                 if "⚠️" in result:
