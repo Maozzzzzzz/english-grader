@@ -102,27 +102,61 @@ if 'generated_topic' not in st.session_state:
 if 'essay_content' not in st.session_state:
     st.session_state.essay_content = ""
 
-# --- 核心功能：萬能連線函數 ---
+# --- 核心功能：強韌連線函數 (自動重試 + 故障轉移) ---
+import time
+
 def call_gemini_api(prompt, key, model_name):
+    # 準備所有可用的鑰匙清單 (從 secrets 讀取)
+    keys_pool = []
+    if "API_KEY_1" in st.secrets: keys_pool.append(st.secrets["API_KEY_1"])
+    if "API_KEY_2" in st.secrets: keys_pool.append(st.secrets["API_KEY_2"])
+    if "API_KEY_3" in st.secrets: keys_pool.append(st.secrets["API_KEY_3"])
+    if "GOOGLE_API_KEY" in st.secrets: keys_pool.append(st.secrets["GOOGLE_API_KEY"])
+    
+    # 如果沒有設定 secrets，就用傳進來的單一 key (可能是使用者手填的)
+    if not keys_pool and key:
+        keys_pool = [key]
+    
     clean_model_name = model_name.replace("models/", "")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model_name}:generateContent?key={key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model_name}:generateContent"
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.7} 
+        "generationConfig": {"temperature": 0.7}
     }
-    try:
-        response = requests.post(url, headers=headers, json=data)
-        if response.status_code == 200:
-            result = response.json()
-            try:
-                return result['candidates'][0]['content']['parts'][0]['text']
-            except (KeyError, IndexError):
-                return "⚠️ AI 回傳格式錯誤，請重試。"
-        else:
-            return f"⚠️ 連線錯誤 (Status {response.status_code}): {response.text}"
-    except Exception as e:
-        return f"⚠️ 系統錯誤: {str(e)}"
+
+    # 最多嘗試 3 次 (或是鑰匙池的數量，取大者)
+    max_retries = max(3, len(keys_pool))
+    
+    for attempt in range(max_retries):
+        # 輪流使用鑰匙 (Round Robin)
+        current_key = keys_pool[attempt % len(keys_pool)]
+        current_url = f"{url}?key={current_key}"
+        
+        try:
+            response = requests.post(current_url, headers=headers, json=data)
+            
+            if response.status_code == 200:
+                result = response.json()
+                try:
+                    return result['candidates'][0]['content']['parts'][0]['text']
+                except (KeyError, IndexError):
+                    return "⚠️ AI 回傳格式錯誤，請重試。"
+            
+            elif response.status_code == 429:
+                # 遇到 429 (流量限制)，印出警告並等待後重試
+                # st.toast 是一個不干擾畫面的小通知
+                st.toast(f"⚠️ 鑰匙 {attempt+1} 額度耗盡，正在切換備用鑰匙...", icon="🔄")
+                time.sleep(2) # 休息 2 秒讓 API 冷卻
+                continue # 進入下一次迴圈，換下一把鑰匙
+            
+            else:
+                return f"⚠️ 連線錯誤 (Status {response.status_code}): {response.text}"
+                
+        except Exception as e:
+            return f"⚠️ 系統錯誤: {str(e)}"
+            
+    return "❌ 所有 API Key 額度皆已耗盡或連線失敗，請稍後再試。"
 
 # 分頁設計
 tab1, tab2 = st.tabs(["🎲 題目設定", "✍️ 作文批改區"])
