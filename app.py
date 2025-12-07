@@ -19,25 +19,14 @@ st.set_page_config(
 def get_random_api_key():
     """
     從 Streamlit Secrets 中讀取 API_KEY_1, API_KEY_2, API_KEY_3
-    並隨機選出一組使用，分散流量風險。
+    並隨機選出一組使用。
     """
     available_keys = []
+    if "API_KEY_1" in st.secrets: available_keys.append(st.secrets["API_KEY_1"])
+    if "API_KEY_2" in st.secrets: available_keys.append(st.secrets["API_KEY_2"])
+    if "API_KEY_3" in st.secrets: available_keys.append(st.secrets["API_KEY_3"])
+    if "GOOGLE_API_KEY" in st.secrets: available_keys.append(st.secrets["GOOGLE_API_KEY"])
     
-    # 嘗試抓取 3 把鑰匙
-    if "API_KEY_1" in st.secrets:
-        available_keys.append(st.secrets["API_KEY_1"])
-    
-    if "API_KEY_2" in st.secrets:
-        available_keys.append(st.secrets["API_KEY_2"])
-        
-    if "API_KEY_3" in st.secrets:
-        available_keys.append(st.secrets["API_KEY_3"])
-    
-    # 相容舊設定 (如果有設 GOOGLE_API_KEY 也納入)
-    if "GOOGLE_API_KEY" in st.secrets:
-        available_keys.append(st.secrets["GOOGLE_API_KEY"])
-    
-    # 🎲 隨機選一把鑰匙回傳
     if available_keys:
         return random.choice(available_keys)
     else:
@@ -62,11 +51,10 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ 設定與評分標準")
     
-    # 顯示目前系統狀態
+    # 1. API Key 狀態
     if PROJECT_API_KEY:
         api_key = PROJECT_API_KEY
-        # 這裡不顯示具體 Key，只顯示狀態，比較美觀且安全
-        st.success("✅ 系統已就緒 (三金鑰輪替中)")
+        st.success("✅ 系統已就緒 (多重金鑰保護中)")
     else:
         st.warning("⚠️ 未偵測到雲端 Key，請手動輸入")
         api_key_input = st.text_input("請輸入 Google API Key", type="password")
@@ -74,36 +62,68 @@ with st.sidebar:
     
     st.markdown("---")
     
-    # API 健檢
-    with st.expander("🔍 API 連線狀態檢測"):
-        if st.button("檢測當前線路"):
-            if not api_key:
-                st.error("❌ 未偵測到 API Key")
-            else:
-                try:
-                    # 簡單測試連線
-                    check_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
-                    resp = requests.get(check_url)
-                    if resp.status_code == 200:
-                        st.success("✅ 連線成功！")
-                    else:
-                        st.error(f"❌ 連線失敗: {resp.status_code}")
-                except Exception as e:
-                    st.error(f"錯誤: {e}")
-
-    # 模型選擇
-    user_available_models = [
-        'gemini-1.5-flash', 'gemini-1.5-pro'
-    ]
-    model_option = st.selectbox("🤖 選擇 AI 模型", user_available_models, index=0)
+    # 2. 模型選擇與自動偵測 (新增功能!!)
+    st.subheader("🤖 AI 模型設定")
     
+    # 定義預設的安全清單 (保底用)
+    default_models = [
+        'gemini-1.5-flash', 
+        'gemini-1.5-pro',
+        'gemini-1.5-flash-001',
+        'gemini-1.5-flash-latest',
+        'gemini-1.0-pro'
+    ]
+
+    # 初始化 session state 中的模型清單
+    if 'model_list' not in st.session_state:
+        st.session_state.model_list = default_models
+
+    # === 自動偵測按鈕 ===
+    if st.button("🔍 掃描此 Key 可用的模型"):
+        if not api_key:
+            st.error("請先設定 API Key")
+        else:
+            try:
+                with st.spinner("正在向 Google 查詢可用模型..."):
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+                    resp = requests.get(url)
+                    
+                    if resp.status_code == 200:
+                        data = resp.json()
+                        # 過濾出可以生成內容 (generateContent) 的模型
+                        valid_models = []
+                        if 'models' in data:
+                            for m in data['models']:
+                                if 'generateContent' in m.get('supportedGenerationMethods', []):
+                                    # 去掉 'models/' 前綴，只留名稱
+                                    model_name = m['name'].replace('models/', '')
+                                    valid_models.append(model_name)
+                        
+                        if valid_models:
+                            st.session_state.model_list = valid_models
+                            st.success(f"成功偵測到 {len(valid_models)} 個可用模型！")
+                        else:
+                            st.warning("未找到支援文字生成的模型，使用預設清單。")
+                    else:
+                        st.error(f"查詢失敗 (Status {resp.status_code})")
+            except Exception as e:
+                st.error(f"發生錯誤: {e}")
+
+    # 顯示下拉選單 (使用 session state 的清單)
+    model_option = st.selectbox(
+        "選擇模型 (建議使用 1.5-flash)", 
+        st.session_state.model_list, 
+        index=0
+    )
+    
+    st.caption(f"目前使用: {model_option}")
     st.markdown("---")
     
-    with st.expander("📚 大考中心評分標準 (點擊展開)"):
+    with st.expander("📚 大考中心評分標準"):
         st.markdown("""
         **依據 113 年學測統計數據校正：**
-        **🏆 頂標 (15-20分)** - 僅前 7.8% 考生。
-        **👍 前標 (12-14分)** - 約前 20% 考生。
+        **🏆 頂標 (15-20分)** - 前 7.8% 考生。
+        **👍 前標 (12-14分)** - 前 20% 考生。
         **😐 均標 (9-11分)** - 約 50% 考生落點。
         **📉 後標 (0-8分)** - 內容貧乏或嚴重離題。
         """)
@@ -118,7 +138,9 @@ if 'essay_content' not in st.session_state:
 
 # --- 核心功能：萬能連線函數 ---
 def call_gemini_api(prompt, key, model_name):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+    # 確保 model_name 不包含 models/ 前綴，避免重複
+    clean_model_name = model_name.replace("models/", "")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{clean_model_name}:generateContent?key={key}"
     headers = {'Content-Type': 'application/json'}
     data = {
         "contents": [{"parts": [{"text": prompt}]}],
@@ -219,7 +241,7 @@ However, despite the convenience robots may bring, I am worried that they might 
             """
             
             with st.spinner(f"AI 閱卷官正在嚴格評分中..."):
-                # 每次呼叫都重新抽一把鑰匙，確保負載平衡
+                # 負載平衡
                 current_key = get_random_api_key() or api_key
                 result = call_gemini_api(system_prompt, current_key, model_option)
                 if "⚠️" in result:
