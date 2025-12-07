@@ -300,7 +300,7 @@ with tab2:
                     st.success("🎉 閱卷完成！")
                     st.markdown(result)
                     st.divider()
-                    st.caption("📢 本批改結果採「嚴格標準」，分數較低為正常現象，旨在反映真實大考競爭力。")
+                    st.caption("📢 本結果依大考中心配分標準所批改，若有疑問請洽詢製作者。")
 
 st.markdown("---")
-st.markdown("<div class='footer'>製作者：中央大學資管系二年級 蔡仁懋</div>", unsafe_allow_html=True)
+st.markdown("<div class='footer'>製作者：中央大學資管系二年級 蔡仁懋 m20060719@gmail.com </div>", unsafe_allow_html=True)
